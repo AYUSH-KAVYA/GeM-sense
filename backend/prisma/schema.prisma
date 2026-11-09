@@ -1,0 +1,58 @@
+// This is the Prisma schema for GeM-sense price comparison platform.
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Tracked product from GeM or matched across platforms.
+model Product {
+  id          Int      @id @default(autoincrement())
+  name        String
+  category    String
+  brand       String?
+  modelNumber String?  @map("model_number")
+  gemUrl      String   @map("gem_url")
+  imageUrl    String?  @map("image_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  prices PriceRecord[]
+
+  @@map("products")
+}
+
+/// E-commerce platform (GeM, Amazon, Flipkart, etc.).
+model Platform {
+  id      Int    @id @default(autoincrement())
+  name    String @unique // e.g. "GeM", "Amazon", "Flipkart"
+  baseUrl String @map("base_url")
+
+  prices PriceRecord[]
+
+  @@map("platforms")
+}
+
+/// A scraped price snapshot for a product on a specific platform.
+model PriceRecord {
+  id         Int      @id @default(autoincrement())
+  productId  Int      @map("product_id")
+  platformId Int      @map("platform_id")
+  price      Float
+  productUrl String   @map("product_url")
+  inStock    Boolean  @default(true) @map("in_stock")
+  rating     Float?
+  scrapedAt  DateTime @default(now()) @map("scraped_at")
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  platform Platform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([platformId])
+  @@index([scrapedAt])
+  @@map("price_records")
+}
