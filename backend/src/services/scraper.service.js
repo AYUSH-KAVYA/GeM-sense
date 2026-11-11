@@ -18,6 +18,38 @@ const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0",
 ];
 
+const KNOWN_BRANDS = [
+  "HP",
+  "Dell",
+  "Lenovo",
+  "Canon",
+  "Epson",
+  "Brother",
+  "Godrej",
+  "Daikin",
+  "LG",
+  "Samsung",
+  "BenQ",
+  "APC",
+  "Logitech",
+  "Asus",
+  "Acer",
+  "Cisco",
+  "Voltas",
+  "Blue Star",
+];
+
+const CATEGORY_HINTS = [
+  { keywords: ["laptop", "macbook", "notebook", "thinkpad", "latitude"], category: "Laptops & Desktops", minPrice: 38000, maxPrice: 95000 },
+  { keywords: ["desktop", "optiplex", "workstation", "pc"], category: "Laptops & Desktops", minPrice: 32000, maxPrice: 78000 },
+  { keywords: ["printer", "laserjet", "ecotank", "imageclass", "scanner"], category: "Printers & Scanners", minPrice: 11000, maxPrice: 48000 },
+  { keywords: ["chair", "desk", "table", "furniture", "almirah"], category: "Office Furniture", minPrice: 6500, maxPrice: 24000 },
+  { keywords: ["ac", "air conditioner", "split ac", "inverter"], category: "Air Conditioners", minPrice: 29000, maxPrice: 58000 },
+  { keywords: ["projector", "display", "monitor", "tv"], category: "Projectors & Displays", minPrice: 12000, maxPrice: 65000 },
+  { keywords: ["ups", "inverter", "battery", "power"], category: "UPS & Power", minPrice: 3500, maxPrice: 18000 },
+  { keywords: ["keyboard", "mouse", "webcam", "headset"], category: "Stationery & Supplies", minPrice: 900, maxPrice: 6500 },
+];
+
 /**
  * Pick a rotating User-Agent header.
  * @param {number} [seed] - Optional deterministic index
@@ -82,6 +114,158 @@ async function fetchHtml(url, { timeoutMs = DEFAULT_TIMEOUT_MS, referer } = {}) 
   }
 
   return html;
+}
+
+/**
+ * Parse a numeric price from raw currency text.
+ * @param {string} rawText
+ * @returns {number|null}
+ */
+function parseRawPrice(rawText) {
+  if (!rawText || typeof rawText !== "string") return null;
+  const cleaned = rawText
+    .replace(/[₹$,\s]/g, "")
+    .replace(/\b(INR|Rs\.?|MRP\.?)\b/gi, "")
+    .trim();
+  const match = cleaned.match(/\d+(\.\d+)?/);
+  if (!match) return null;
+  const val = parseFloat(match[0]);
+  return Number.isFinite(val) && val > 0 ? val : null;
+}
+
+/**
+ * Parse a numeric rating (0-5) from rating text like "4.3 out of 5 stars".
+ * @param {string} rawText
+ * @returns {number|null}
+ */
+function parseRating(rawText) {
+  if (!rawText || typeof rawText !== "string") return null;
+  const match = rawText.match(/([0-4](\.\d+)?|5(\.0+)?)/);
+  if (!match) return null;
+  const val = parseFloat(match[1]);
+  return Number.isFinite(val) && val >= 0 && val <= 5 ? +val.toFixed(1) : null;
+}
+
+/**
+ * Deterministic 32-bit FNV-1a hash so fallback pricing is reproducible per query.
+ * @param {string} input
+ * @returns {number} Unsigned 32-bit integer
+ */
+function hashQuery(input) {
+  let hash = 2166136261;
+  const str = String(input || "").toLowerCase().trim();
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+/**
+ * Extract brand, model number, category, and deterministic base price from a query.
+ * @param {string} query
+ */
+function inferMetadataFromQuery(query) {
+  const cleanQuery = String(query || "Office Equipment").trim();
+  const lower = cleanQuery.toLowerCase();
+
+  // Handle direct GeM URL queries gracefully
+  let displayQuery = cleanQuery;
+  if (/^https?:\/\//i.test(cleanQuery)) {
+    const slugMatch = cleanQuery.match(/\/([^/]+)\/p-\d+/i) || cleanQuery.match(/\/([^/?#]+)(?:[?#]|$)/);
+    displayQuery = slugMatch
+      ? slugMatch[1].replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+      : "GeM Catalog Product";
+  }
+
+  const normalizedDisplay = displayQuery.toLowerCase();
+  const brand =
+    KNOWN_BRANDS.find((b) => normalizedDisplay.includes(b.toLowerCase())) || null;
+
+  // Look for model-like alphanumeric tokens (e.g., 5540, MFP4104dw, L3250)
+  const modelMatch = displayQuery.match(/\b(?=[A-Za-z0-9-]*\d)[A-Za-z0-9-]{3,16}\b/);
+  const modelNumber = modelMatch ? modelMatch[0] : null;
+
+  const hint = CATEGORY_HINTS.find((entry) =>
+    entry.keywords.some((kw) => lower.includes(kw) || normalizedDisplay.includes(kw))
+  ) || {
+    category: "Office & IT Equipment",
+    minPrice: 8000,
+    maxPrice: 35000,
+  };
+
+  const h = hashQuery(displayQuery);
+  const spread = hint.maxPrice - hint.minPrice;
+  const basePrice = Math.round((hint.minPrice + (h % spread)) / 100) * 100;
+
+  return {
+    displayTitle: displayQuery,
+    brand,
+    modelNumber,
+    category: hint.category,
+    basePrice,
+    hash: h,
+  };
+}
+
+/**
+ * Deterministic demo fallback generator when live scraping is blocked or fails.
+ * @param {"GeM"|"Amazon"|"Flipkart"} platform
+ * @param {string} query
+ * @param {string} reason
+ * @returns {object} Structured product result
+ */
+function generateFallbackResult(platform, query, reason) {
+  const meta = inferMetadataFromQuery(query);
+  const encodedQuery = encodeURIComponent(meta.displayTitle);
+
+  // Platform-specific deterministic multipliers & URLs
+  let priceMultiplier = 1;
+  let productUrl = "";
+  let rating = 4.2;
+  let inStock = true;
+
+  if (platform === "GeM") {
+    // GeM is typically competitive, with slight deterministic variance
+    priceMultiplier = 0.92 + ((meta.hash % 15) / 100); // 0.92x – 1.06x
+    productUrl = /^https?:\/\/(mkp\.)?gem\.gov\.in/i.test(query)
+      ? query.trim()
+      : `https://mkp.gem.gov.in/search?q=${encodedQuery}`;
+    rating = +(3.8 + ((meta.hash % 11) / 10)).toFixed(1);
+    inStock = true;
+  } else if (platform === "Amazon") {
+    priceMultiplier = 0.98 + (((meta.hash >> 4) % 18) / 100); // 0.98x – 1.15x
+    productUrl = `https://www.amazon.in/s?k=${encodedQuery}`;
+    rating = +(3.9 + (((meta.hash >> 3) % 10) / 10)).toFixed(1);
+    inStock = (meta.hash % 10) !== 0;
+  } else {
+    priceMultiplier = 0.97 + (((meta.hash >> 8) % 20) / 100); // 0.97x – 1.16x
+    productUrl = `https://www.flipkart.com/search?q=${encodedQuery}`;
+    rating = +(3.8 + (((meta.hash >> 5) % 11) / 10)).toFixed(1);
+    inStock = (meta.hash % 12) !== 0;
+  }
+
+  const price = Math.round((meta.basePrice * priceMultiplier) / 10) * 10;
+  const title = `${meta.displayTitle}`;
+
+  console.warn(
+    `[Scraper Fallback] ${platform} using deterministic fallback for "${query}" (${reason})`
+  );
+
+  return {
+    platform,
+    title,
+    name: title,
+    category: meta.category,
+    brand: meta.brand,
+    modelNumber: meta.modelNumber,
+    price,
+    productUrl,
+    imageUrl: null,
+    inStock,
+    rating: Math.min(5, Math.max(1, rating)),
+    isFallback: true,
+  };
 }
 
 /**
