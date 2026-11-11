@@ -119,9 +119,91 @@ export async function getCachedOrFreshProducts(query, ttlHours = 6) {
     };
   }
 
+  // 2. Cache miss or stale -> scrape all platforms in parallel
+  const scrapedResults = await scrapeAllPlatforms(cleanQuery);
+
+  if (scrapedResults.length === 0) {
+    // Return stale data if available rather than empty when scraping yields nothing
+    return {
+      source: existingProducts.length > 0 ? "cache" : "live_scrape",
+      data: existingProducts.map(formatProductWithLatestPrices),
+    };
+  }
+
+  // Choose GeM listing (or first available result) as the canonical product metadata
+  const gemResult =
+    scrapedResults.find((item) => item.platform === "GeM") || scrapedResults[0];
+  const anyImageResult = scrapedResults.find((item) => Boolean(item.imageUrl));
+
+  const canonicalGemUrl =
+    gemResult.platform === "GeM"
+      ? gemResult.productUrl
+      : `https://mkp.gem.gov.in/search?q=${encodeURIComponent(cleanQuery)}`;
+
+  // Find an existing product by gemUrl or stale match so we update instead of duplicating
+  const existingMatch =
+    existingProducts[0] ||
+    (await prisma.product.findFirst({
+      where: { gemUrl: canonicalGemUrl },
+    }));
+
+  const productPayload = {
+    name: gemResult.title || gemResult.name || cleanQuery,
+    category: gemResult.category || "Office & IT Equipment",
+    brand: gemResult.brand || null,
+    modelNumber: gemResult.modelNumber || null,
+    gemUrl: canonicalGemUrl,
+    imageUrl: gemResult.imageUrl || anyImageResult?.imageUrl || null,
+  };
+
+  let persistedProduct;
+  if (existingMatch) {
+    persistedProduct = await prisma.product.update({
+      where: { id: existingMatch.id },
+      data: {
+        brand: existingMatch.brand || productPayload.brand,
+        modelNumber: existingMatch.modelNumber || productPayload.modelNumber,
+        imageUrl: existingMatch.imageUrl || productPayload.imageUrl,
+      },
+    });
+  } else {
+    persistedProduct = await prisma.product.create({
+      data: productPayload,
+    });
+  }
+
+  // 3. Upsert platforms & append new PriceRecord rows (preserving historical records)
+  for (const scraped of scrapedResults) {
+    if (typeof scraped.price !== "number" || scraped.price <= 0) continue;
+
+    const platform = await upsertPlatform(scraped.platform);
+
+    await prisma.priceRecord.create({
+      data: {
+        productId: persistedProduct.id,
+        platformId: platform.id,
+        price: scraped.price,
+        productUrl: scraped.productUrl,
+        inStock: scraped.inStock ?? true,
+        rating: scraped.rating ?? null,
+      },
+    });
+  }
+
+  // 4. Reload the updated product with latest PriceRecords
+  const refreshedProduct = await prisma.product.findUnique({
+    where: { id: persistedProduct.id },
+    include: {
+      prices: {
+        include: { platform: true },
+        orderBy: { scrapedAt: "desc" },
+      },
+    },
+  });
+
   return {
-    source: "cache",
-    data: existingProducts.map(formatProductWithLatestPrices),
+    source: "live_scrape",
+    data: refreshedProduct ? [formatProductWithLatestPrices(refreshedProduct)] : [],
   };
 }
 
