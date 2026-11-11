@@ -359,21 +359,64 @@ export async function scrapeGemProduct(query) {
 }
 
 /**
- * Scrape a product from Amazon India.
+ * Scrape product details from Amazon India search results.
  * @param {string} query - Product search term
- * @returns {Promise<object|null>} Scraped product data
+ * @returns {Promise<object>} Scraped or fallback product data
  */
 export async function scrapeAmazonProduct(query) {
-  console.log(`[Scraper] Amazon search for: "${query}" (mock)`);
-  return {
-    platform: "Amazon",
-    name: `${query} — Amazon Listing`,
-    price: Math.floor(Math.random() * 50000) + 12000,
-    productUrl: `https://www.amazon.in/s?k=${encodeURIComponent(query)}`,
-    inStock: Math.random() > 0.1,
-    rating: +(Math.random() * 1.5 + 3.5).toFixed(1),
-    imageUrl: null,
-  };
+  const meta = inferMetadataFromQuery(query);
+  const searchQuery = meta.displayTitle;
+  const searchUrl = `https://www.amazon.in/s?k=${encodeURIComponent(searchQuery)}`;
+
+  try {
+    const html = await fetchHtml(searchUrl, {
+      referer: "https://www.amazon.in/",
+    });
+    const $ = cheerio.load(html);
+
+    const card = $('[data-component-type="s-search-result"]').first();
+    if (!card.length) {
+      throw new Error("No Amazon search result cards found");
+    }
+
+    const title =
+      card.find("h2 a span, h2 span").first().text().trim() || null;
+    const priceText =
+      card.find(".a-price .a-offscreen").first().text() ||
+      card.find(".a-price-whole").first().text();
+    const price = parseRawPrice(priceText);
+    const rating = parseRating(card.find(".a-icon-alt").first().text());
+    const href = card.find("h2 a").first().attr("href");
+    const productUrl = href
+      ? href.startsWith("http")
+        ? href
+        : `https://www.amazon.in${href}`
+      : searchUrl;
+    const imageUrl = card.find("img.s-image").first().attr("src") || null;
+    const cardText = card.text().toLowerCase();
+    const inStock = !cardText.includes("currently unavailable");
+
+    if (!title || !price) {
+      throw new Error("Could not parse Amazon title or price from HTML");
+    }
+
+    return {
+      platform: "Amazon",
+      title,
+      name: title,
+      category: meta.category,
+      brand: meta.brand,
+      modelNumber: meta.modelNumber,
+      price,
+      productUrl,
+      imageUrl,
+      inStock,
+      rating,
+      isFallback: false,
+    };
+  } catch (error) {
+    return generateFallbackResult("Amazon", query, error.message);
+  }
 }
 
 /**
