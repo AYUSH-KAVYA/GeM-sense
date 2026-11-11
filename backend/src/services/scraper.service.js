@@ -420,27 +420,82 @@ export async function scrapeAmazonProduct(query) {
 }
 
 /**
- * Scrape a product from Flipkart.
+ * Scrape product details from Flipkart search results.
  * @param {string} query - Product search term
- * @returns {Promise<object|null>} Scraped product data
+ * @returns {Promise<object>} Scraped or fallback product data
  */
 export async function scrapeFlipkartProduct(query) {
-  console.log(`[Scraper] Flipkart search for: "${query}" (mock)`);
-  return {
-    platform: "Flipkart",
-    name: `${query} — Flipkart Listing`,
-    price: Math.floor(Math.random() * 45000) + 11000,
-    productUrl: `https://www.flipkart.com/search?q=${encodeURIComponent(query)}`,
-    inStock: Math.random() > 0.15,
-    rating: +(Math.random() * 1.5 + 3.5).toFixed(1),
-    imageUrl: null,
-  };
+  const meta = inferMetadataFromQuery(query);
+  const searchQuery = meta.displayTitle;
+  const searchUrl = `https://www.flipkart.com/search?q=${encodeURIComponent(searchQuery)}`;
+
+  try {
+    const html = await fetchHtml(searchUrl, {
+      referer: "https://www.flipkart.com/",
+    });
+    const $ = cheerio.load(html);
+
+    const card = $('[data-id], .tUxRFH, .slAVV4, ._1AtVbE').filter((_, el) => {
+      return $(el).find('a[href*="/p/"]').length > 0;
+    }).first();
+
+    if (!card.length) {
+      throw new Error("No Flipkart product cards found");
+    }
+
+    const title =
+      card
+        .find(".KzDlHZ, .wjcEIp, ._4rR01T, .s1Q9rs, a[title]")
+        .first()
+        .text()
+        .trim() ||
+      card.find("a[title]").first().attr("title")?.trim() ||
+      null;
+    const price = parseRawPrice(
+      card.find(".Nx9bqj, ._30jeq3").first().text()
+    );
+    const rating = parseRating(
+      card.find(".XQDdHH, ._3LWZlK").first().text()
+    );
+    const href = card.find('a[href*="/p/"]').first().attr("href");
+    const productUrl = href
+      ? href.startsWith("http")
+        ? href
+        : `https://www.flipkart.com${href}`
+      : searchUrl;
+    const imageUrl = card.find("img").first().attr("src") || null;
+    const cardText = card.text().toLowerCase();
+    const inStock =
+      !cardText.includes("currently unavailable") &&
+      !cardText.includes("sold out");
+
+    if (!title || !price) {
+      throw new Error("Could not parse Flipkart title or price from HTML");
+    }
+
+    return {
+      platform: "Flipkart",
+      title,
+      name: title,
+      category: meta.category,
+      brand: meta.brand,
+      modelNumber: meta.modelNumber,
+      price,
+      productUrl,
+      imageUrl,
+      inStock,
+      rating,
+      isFallback: false,
+    };
+  } catch (error) {
+    return generateFallbackResult("Flipkart", query, error.message);
+  }
 }
 
 /**
- * Run all platform scrapers in parallel for a given query.
- * @param {string} query - Product search term
- * @returns {Promise<object[]>} Array of scraped results from all platforms
+ * Run all three platform scrapers in parallel using Promise.allSettled().
+ * @param {string} query - Product search term or GeM URL
+ * @returns {Promise<object[]>} Array of scraped results across GeM, Amazon, and Flipkart
  */
 export async function scrapeAllPlatforms(query) {
   const results = await Promise.allSettled([
@@ -453,3 +508,11 @@ export async function scrapeAllPlatforms(query) {
     .filter((r) => r.status === "fulfilled" && r.value !== null)
     .map((r) => r.value);
 }
+
+export default {
+  getRandomUserAgent,
+  scrapeGemProduct,
+  scrapeAmazonProduct,
+  scrapeFlipkartProduct,
+  scrapeAllPlatforms,
+};
