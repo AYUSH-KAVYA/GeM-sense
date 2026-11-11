@@ -59,3 +59,72 @@ function buildProductSearchWhere(cleanQuery) {
     ],
   };
 }
+
+/**
+ * Upsert a Platform record by its unique name.
+ * @param {string} platformName
+ * @returns {Promise<object>} Prisma Platform record
+ */
+async function upsertPlatform(platformName) {
+  const baseUrl =
+    PLATFORM_BASE_URLS[platformName] ||
+    `https://www.${platformName.toLowerCase()}.com`;
+
+  return prisma.platform.upsert({
+    where: { name: platformName },
+    update: { baseUrl },
+    create: { name: platformName, baseUrl },
+  });
+}
+
+/**
+ * Fetch cached products from PostgreSQL if fresh within `ttlHours`,
+ * otherwise trigger a live multi-platform scrape, persist new PriceRecords
+ * (preserving historical rows), and return fresh data.
+ *
+ * @param {string} query - Product search query or GeM URL
+ * @param {number} [ttlHours=6] - Cache freshness window in hours
+ * @returns {Promise<{ source: 'cache' | 'live_scrape', data: object[] }>}
+ */
+export async function getCachedOrFreshProducts(query, ttlHours = 6) {
+  const cleanQuery = String(query || "").trim();
+  if (!cleanQuery) {
+    return { source: "cache", data: [] };
+  }
+
+  const cutoffDate = new Date(Date.now() - ttlHours * 60 * 60 * 1000);
+  const whereClause = buildProductSearchWhere(cleanQuery);
+
+  // 1. Check PostgreSQL for matching products and their price history
+  const existingProducts = await prisma.product.findMany({
+    where: whereClause,
+    include: {
+      prices: {
+        include: { platform: true },
+        orderBy: { scrapedAt: "desc" },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Filter products that have at least one PriceRecord newer than cutoffDate
+  const freshProducts = existingProducts.filter((product) =>
+    product.prices.some((record) => new Date(record.scrapedAt) >= cutoffDate)
+  );
+
+  if (freshProducts.length > 0) {
+    return {
+      source: "cache",
+      data: freshProducts.map(formatProductWithLatestPrices),
+    };
+  }
+
+  return {
+    source: "cache",
+    data: existingProducts.map(formatProductWithLatestPrices),
+  };
+}
+
+export default {
+  getCachedOrFreshProducts,
+};
