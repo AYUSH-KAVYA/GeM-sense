@@ -269,21 +269,93 @@ function generateFallbackResult(platform, query, reason) {
 }
 
 /**
- * Scrape a product from the GeM portal.
- * @param {string} query - Product search term
- * @returns {Promise<object|null>} Scraped product data
+ * Scrape product details from the GeM portal (search results or direct product page).
+ * @param {string} query - Product keyword or GeM product URL
+ * @returns {Promise<object>} Scraped or fallback product data
  */
 export async function scrapeGemProduct(query) {
-  console.log(`[Scraper] GeM search for: "${query}" (mock)`);
-  return {
-    platform: "GeM",
-    name: `${query} — GeM Listed Product`,
-    price: Math.floor(Math.random() * 40000) + 10000,
-    productUrl: `https://mkp.gem.gov.in/search?q=${encodeURIComponent(query)}`,
-    inStock: true,
-    rating: +(Math.random() * 2 + 3).toFixed(1),
-    imageUrl: null,
-  };
+  const cleanQuery = String(query || "").trim();
+  if (!cleanQuery) {
+    return generateFallbackResult("GeM", "Office Equipment", "Empty query");
+  }
+
+  const isDirectUrl = /^https?:\/\/(mkp\.)?gem\.gov\.in/i.test(cleanQuery);
+  const targetUrl = isDirectUrl
+    ? cleanQuery
+    : `https://mkp.gem.gov.in/search?q=${encodeURIComponent(cleanQuery)}`;
+
+  try {
+    const html = await fetchHtml(targetUrl, {
+      referer: "https://mkp.gem.gov.in/",
+    });
+    const $ = cheerio.load(html);
+    const meta = inferMetadataFromQuery(cleanQuery);
+
+    let title = null;
+    let price = null;
+    let brand = null;
+    let modelNumber = null;
+    let imageUrl = null;
+    let productUrl = targetUrl;
+    let inStock = true;
+
+    if (isDirectUrl) {
+      title =
+        $("#product-title, .pdp-product-title, h1").first().text().trim() || null;
+      price = parseRawPrice(
+        $(".m-w-price, .variant-final-price, .pdp-price").first().text()
+      );
+      brand = $(".pdp-brand, .brand-name").first().text().trim() || meta.brand;
+      modelNumber =
+        $(".pdp-model, .model-number").first().text().trim() || meta.modelNumber;
+      imageUrl =
+        $(".pdp-image img, #product-image img").first().attr("src") || null;
+      const bodyText = $("body").text().toLowerCase();
+      inStock = !bodyText.includes("out of stock");
+    } else {
+      const card = $(".variant-wrapper, .product-item, .search-result-item").first();
+      if (card.length) {
+        title =
+          card.find(".variant-title, .product-title, h2, h3").first().text().trim() ||
+          null;
+        price = parseRawPrice(
+          card.find(".variant-final-price, .m-w-price, .price").first().text()
+        );
+        brand = card.find(".brand-name").first().text().trim() || meta.brand;
+        modelNumber =
+          card.find(".model-number").first().text().trim() || meta.modelNumber;
+        imageUrl = card.find("img").first().attr("src") || null;
+        const href = card.find("a").first().attr("href");
+        if (href) {
+          productUrl = href.startsWith("http")
+            ? href
+            : `https://mkp.gem.gov.in${href.startsWith("/") ? "" : "/"}${href}`;
+        }
+        inStock = !card.text().toLowerCase().includes("out of stock");
+      }
+    }
+
+    if (!title || !price) {
+      throw new Error("Could not parse GeM title or price from HTML");
+    }
+
+    return {
+      platform: "GeM",
+      title,
+      name: title,
+      category: meta.category,
+      brand,
+      modelNumber,
+      price,
+      productUrl,
+      imageUrl,
+      inStock,
+      rating: null,
+      isFallback: false,
+    };
+  } catch (error) {
+    return generateFallbackResult("GeM", cleanQuery, error.message);
+  }
 }
 
 /**
