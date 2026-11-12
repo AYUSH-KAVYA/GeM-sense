@@ -1,73 +1,39 @@
-import { Link, useLocation } from 'react-router-dom';
-import { Layers, ShieldCheck, Activity, ExternalLink } from 'lucide-react';
+import { Link, NavLink } from 'react-router-dom';
+import { Landmark, Search, ShieldCheck } from 'lucide-react';
+
+const navClass = ({ isActive }) =>
+  `rounded-lg px-3 py-2 text-sm font-medium transition ${
+    isActive ? 'bg-blue-50 text-navy' : 'text-slate-600 hover:bg-slate-100 hover:text-ink'
+  }`;
 
 export default function Navbar() {
-  const location = useLocation();
-
   return (
-    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Brand / Logo */}
-        <Link to="/" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 rounded-xl bg-gem-700 text-white flex items-center justify-center shadow-sm group-hover:bg-gem-800 transition-colors">
-            <Layers className="w-5 h-5" />
-          </div>
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-slate-900 tracking-tight text-lg leading-none">
-                GeM <span className="text-gem-700">Compare</span>
-              </span>
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Live Index
-              </span>
-            </div>
-            <span className="text-[11px] text-slate-500 font-medium tracking-tight">
-              Procurement Intelligence & Price Verification
-            </span>
-          </div>
+    <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+      <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <Link to="/" className="flex items-center gap-3" aria-label="GeM Compare home">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-navy text-white shadow-sm">
+            <Landmark size={21} strokeWidth={2.2} />
+          </span>
+          <span>
+            <span className="block text-[17px] font-extrabold tracking-tight text-ink">GeM<span className="text-emerald-700">Compare</span></span>
+            <span className="block text-[10px] font-semibold uppercase tracking-[0.17em] text-slate-500">Procurement intelligence</span>
+          </span>
         </Link>
 
-        {/* Navigation Links */}
-        <nav className="flex items-center gap-6">
-          <Link
-            to="/"
-            className={`text-sm font-semibold transition-colors ${
-              location.pathname === '/'
-                ? 'text-gem-700'
-                : 'text-slate-600 hover:text-gem-700'
-            }`}
-          >
-            Home
-          </Link>
-          <Link
-            to="/results"
-            className={`text-sm font-semibold transition-colors ${
-              location.pathname.startsWith('/results')
-                ? 'text-gem-700'
-                : 'text-slate-600 hover:text-gem-700'
-            }`}
-          >
-            Price Comparison
-          </Link>
-
-          <div className="hidden md:flex items-center gap-2 pl-4 border-l border-slate-200">
-            <span className="inline-flex items-center gap-1 text-xs text-slate-500 font-medium">
-              <ShieldCheck className="w-4 h-4 text-gem-700" />
-              GovTech Certified
-            </span>
-          </div>
-
-          <a
-            href="https://mkp.gem.gov.in"
-            target="_blank"
-            rel="noreferrer"
-            className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:border-gem-600 hover:text-gem-700 transition-colors"
-          >
-            <span>Official GeM</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
+        <nav className="hidden items-center gap-1 sm:flex" aria-label="Main navigation">
+          <NavLink to="/" end className={navClass}>Home</NavLink>
+          <NavLink to="/results" className={navClass}>Price comparison</NavLink>
+          <a href="https://gem.gov.in/" target="_blank" rel="noreferrer" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-ink">Official GeM</a>
         </nav>
+
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="hidden items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 md:inline-flex">
+            <ShieldCheck size={14} /> Public data
+          </span>
+          <Link to="/results" className="inline-flex items-center gap-2 rounded-xl bg-navy px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-950">
+            <Search size={16} /> <span className="hidden xs:inline">Compare prices</span><span className="xs:hidden">Compare</span>
+          </Link>
+        </div>
       </div>
     </header>
   );
