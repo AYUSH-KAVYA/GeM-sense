@@ -1,215 +1,77 @@
-import { ExternalLink, TrendingDown, TrendingUp, Tag, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { ArrowUpRight, BadgeCheck, ExternalLink, Package } from 'lucide-react';
+
+const formatPrice = (value) => {
+  if (value == null || value === '') return '—';
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(value));
+};
+
+function getDeal(price, gemPrice) {
+  if (!price || !gemPrice || Number(price) === Number(gemPrice)) return null;
+  const pct = Math.round((Math.abs(Number(price) - Number(gemPrice)) / Number(price)) * 100);
+  return Number(gemPrice) < Number(price)
+    ? { text: `${pct}% cheaper on GeM`, tone: 'green' }
+    : { text: `${Math.round((Math.abs(Number(price) - Number(gemPrice)) / Number(gemPrice)) * 100)}% cheaper on marketplace`, tone: 'amber' };
+}
 
 export default function ProductCard({ product }) {
-  if (!product) return null;
+  const {
+    id, title = 'Untitled product', category = 'General', modelNumber, model_number,
+    image, imageUrl, gemPrice, gem_price, competitors = {},
+  } = product;
 
-  // Format currency in Indian Rupees
-  const formatINR = (val) => {
-    if (val === null || val === undefined || isNaN(val)) return 'N/A';
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0,
-    }).format(val);
-  };
-
-  // Extract GeM price and URL
-  let gemPrice = null;
-  let gemUrl = product.gemUrl || product.gem_url || '#';
-
-  if (Array.isArray(product.latestPrices)) {
-    const gemRecord = product.latestPrices.find(
-      (p) => p.platform?.toLowerCase() === 'gem'
-    );
-    if (gemRecord) {
-      gemPrice = gemRecord.price;
-      gemUrl = gemRecord.productUrl || gemUrl;
-    }
-  } else if (product.gem_price !== undefined) {
-    gemPrice = product.gem_price;
-  }
-
-  // Extract competitor prices
-  let competitors = [];
-  if (Array.isArray(product.latestPrices)) {
-    competitors = product.latestPrices.filter(
-      (p) => p.platform?.toLowerCase() !== 'gem'
-    );
-  } else if (Array.isArray(product.price_records)) {
-    competitors = product.price_records
-      .filter((p) => p.platform?.name?.toLowerCase() !== 'gem')
-      .map((p) => ({
-        platform: p.platform?.name || 'Competitor',
-        price: p.price,
-        productUrl: p.url || p.productUrl,
-        inStock: p.inStock ?? true,
-      }));
-  } else if (product.competitor_price !== undefined) {
-    competitors = [
-      {
-        platform: product.competitor_name || 'Amazon',
-        price: product.competitor_price,
-        productUrl: '#',
-        inStock: true,
-      },
-    ];
-  }
+  const officialPrice = gemPrice ?? gem_price;
+  const model = modelNumber ?? model_number ?? 'Not specified';
+  const imageSrc = imageUrl ?? image;
+  const marketplaces = [
+    { name: 'Amazon', price: competitors.amazon?.price ?? product.amazonPrice ?? product.amazon_price, url: competitors.amazon?.url ?? product.amazonUrl ?? 'https://www.amazon.in/' },
+    { name: 'Flipkart', price: competitors.flipkart?.price ?? product.flipkartPrice ?? product.flipkart_price, url: competitors.flipkart?.url ?? product.flipkartUrl ?? 'https://www.flipkart.com/' },
+  ];
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 p-5 flex flex-col justify-between">
-      <div>
-        {/* Header Badges & Category */}
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-            <Tag className="w-3 h-3 text-slate-500" />
-            {product.category || 'General Equipment'}
-          </span>
-          {product.modelNumber && (
-            <span className="text-[11px] font-mono font-medium text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
-              Model: {product.modelNumber}
-            </span>
-          )}
+    <article className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg">
+      <div className="relative flex h-48 items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50/70 p-5">
+        {imageSrc ? (
+          <img src={imageSrc} alt={title} className="h-full w-full object-contain mix-blend-multiply" loading="lazy" />
+        ) : (
+          <div className="grid h-20 w-20 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-300"><Package size={38} /></div>
+        )}
+        <span className="absolute left-3 top-3 rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-sm">{category}</span>
+        {id != null && <span className="absolute right-3 top-3 text-[10px] font-medium text-slate-400">ID: {id}</span>}
+      </div>
+
+      <div className="p-4 sm:p-5">
+        <h3 className="line-clamp-2 min-h-12 text-[15px] font-bold leading-6 text-ink">{title}</h3>
+        <p className="mt-1 text-xs text-slate-500">Model no. <span className="font-medium text-slate-700">{model}</span></p>
+
+        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-800"><BadgeCheck size={14} /> GeM Official Price</div>
+          <div className="mt-1 text-2xl font-extrabold tracking-tight text-emerald-950">{formatPrice(officialPrice)}</div>
+          <div className="mt-1 text-[11px] text-emerald-700/80">Listed on Government e-Marketplace</div>
         </div>
 
-        {/* Product Image & Title */}
-        <div className="flex gap-4 items-start mb-4">
-          <div className="w-20 h-20 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center p-2 flex-shrink-0">
-            {product.imageUrl ? (
-              <img
-                src={product.imageUrl}
-                alt={product.name}
-                className="w-full h-full object-contain"
-              />
-            ) : (
-              <div className="text-slate-400 text-[10px] font-semibold text-center uppercase tracking-wider">
-                {product.brand || 'Product'}
-              </div>
-            )}
-          </div>
-          <div>
-            <h3 className="font-bold text-slate-900 text-sm leading-snug line-clamp-2 hover:text-gem-700 transition-colors" title={product.name}>
-              {product.name}
-            </h3>
-            {product.brand && (
-              <p className="text-xs text-slate-500 mt-1 font-medium">Brand: {product.brand}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Highlighted "GeM Official Price" Box */}
-        <div className="bg-gradient-to-br from-gem-50 to-sky-50/60 border border-gem-200 rounded-xl p-3.5 mb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-gem-700" />
-              <span className="text-xs font-bold text-gem-800 uppercase tracking-wide">
-                GeM Official Price
-              </span>
-            </div>
-            {gemUrl && gemUrl !== '#' && (
-              <a
-                href={gemUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] font-semibold text-gem-700 hover:text-gem-900 flex items-center gap-1 hover:underline"
-              >
-                <span>GeM Portal</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            )}
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-gem-900">
-              {formatINR(gemPrice)}
-            </span>
-            <span className="text-[11px] text-gem-600 font-medium">
-              (Govt. benchmark)
-            </span>
-          </div>
-        </div>
-
-        {/* Competitor Price List */}
-        <div>
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-            Commercial Competitor Benchmarks
-          </span>
-
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Marketplace comparison</p>
           <div className="space-y-2">
-            {competitors.length > 0 ? (
-              competitors.map((comp, idx) => {
-                const diff = (comp.price || 0) - (gemPrice || 0);
-                const isGeMCheaper = diff > 0;
-                const percent = comp.price
-                  ? Math.abs(Math.round((diff / comp.price) * 100))
-                  : 0;
-
-                return (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl px-3 py-2 transition-colors text-xs"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-800">
-                        {comp.platform}
-                      </span>
-                      {comp.productUrl && comp.productUrl !== '#' && (
-                        <a
-                          href={comp.productUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-slate-400 hover:text-slate-600"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-bold text-slate-800">
-                        {formatINR(comp.price)}
-                      </span>
-
-                      {gemPrice && comp.price ? (
-                        <span
-                          className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full font-semibold text-[10px] ${
-                            isGeMCheaper
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          {isGeMCheaper ? (
-                            <>
-                              <TrendingDown className="w-3 h-3" />
-                              {percent}% cheaper on GeM
-                            </>
-                          ) : (
-                            <>
-                              <TrendingUp className="w-3 h-3" />
-                              {percent}% cheaper on {comp.platform}
-                            </>
-                          )}
-                        </span>
-                      ) : null}
-                    </div>
+            {marketplaces.map((market) => {
+              const deal = getDeal(market.price, officialPrice);
+              const isGeMCheaper = deal?.tone === 'green';
+              return (
+                <div key={market.name} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-700">{market.name}</p>
+                    <p className="mt-0.5 text-sm font-bold text-ink">{formatPrice(market.price)}</p>
+                    {deal && <p className={`mt-1 text-[10px] font-semibold ${isGeMCheaper ? 'text-emerald-700' : 'text-amber-700'}`}>{deal.text}</p>}
                   </div>
-                );
-              })
-            ) : (
-              <p className="text-xs text-slate-400 italic py-1">
-                No external competitor price logged yet.
-              </p>
-            )}
+                  <a href={market.url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${market.name} listing`} className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-navy"><ExternalLink size={15} /></a>
+                </div>
+              );
+            })}
           </div>
         </div>
-      </div>
-
-      {/* Card Footer Status */}
-      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-        <span className="flex items-center gap-1 text-emerald-600 font-medium">
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          Price verified
-        </span>
-        <span>Includes GST & standard delivery</span>
-      </div>
+        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-400">
+          <span>Price snapshot · Phase 1</span><ArrowUpRight size={14} />
+        </div>
     </div>
+    </article>
   );
 }
