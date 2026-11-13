@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
-import { X, ExternalLink, Package, ShieldCheck, TrendingDown, Star } from 'lucide-react';
+import { X, ExternalLink, Package, ShieldCheck, Star, RefreshCw } from 'lucide-react';
 import PriceChartPlaceholder from './PriceChartPlaceholder.jsx';
+import { refreshProductPrice } from '../services/api.js';
 
 const money = (value) => value == null || value === '' || !Number.isFinite(Number(value))
   ? '—'
@@ -25,27 +26,53 @@ function Stars({ rating }) {
   );
 }
 
-export default function ProductModal({ product, isOpen, onClose }) {
+export default function ProductModal({ product, isOpen, onClose, onPriceRefresh }) {
   const [quantity, setQuantity] = useState(10);
-  useEffect(() => { if (isOpen) setQuantity(10); }, [isOpen, product]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState('');
+  const [historyKey, setHistoryKey] = useState(0);
+  useEffect(() => { if (isOpen) { setQuantity(10); setRefreshError(''); } }, [isOpen, product]);
   const platforms = useMemo(() => getPlatforms(product ?? {}), [product]);
   const gemPrice = Number(platforms[0].price);
   const lowest = platforms.reduce((best, item) => Number.isFinite(Number(item.price)) && (!best || Number(item.price) < Number(best.price)) ? item : best, null);
-  const savings = platforms.slice(1).map(p => Number(p.price)).filter(Number.isFinite).reduce((max, price) => Math.max(max, price - gemPrice), 0);
-  const perUnitSavings = Math.max(0, ...platforms.map(p => Number(p.price)).filter(Number.isFinite)) - gemPrice;
+  const perUnitSavings = Math.max(0, ...platforms.map((p) => Number(p.price)).filter(Number.isFinite)) - gemPrice;
   const validGem = Number.isFinite(gemPrice);
 
   if (!isOpen || !product) return null;
   const title = product.title ?? product.name ?? 'Product details';
 
+  const handleRefresh = async () => {
+    if (product.id == null && product._id == null) {
+      setRefreshError('Product ID is unavailable; cannot refresh.');
+      return;
+    }
+    setRefreshing(true);
+    setRefreshError('');
+    try {
+      const result = await refreshProductPrice(product.id ?? product._id);
+      onPriceRefresh?.(result, product);
+      setHistoryKey((key) => key + 1);
+    } catch (error) {
+      setRefreshError(error?.response?.data?.message || 'Price refresh failed. Check backend connection.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-6" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="product-modal-title" className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
-        <header className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white/95 p-5 backdrop-blur">
+        <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-200 bg-white/95 p-5 backdrop-blur">
           <div><p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Procurement comparison</p><h2 id="product-modal-title" className="mt-1 text-xl font-bold text-slate-900">{title}</h2></div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close comparison"><X size={20} /></button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button type="button" onClick={handleRefresh} disabled={refreshing} className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm">
+              <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} /> {refreshing ? 'Refreshing…' : 'Force Live Price Refresh'}
+            </button>
+            <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close comparison"><X size={20} /></button>
+          </div>
         </header>
         <div className="p-5 sm:p-7">
+          {refreshError && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{refreshError}</p>}
           <div className="mb-6 flex flex-col gap-4 sm:flex-row">
             <div className="grid h-32 w-full place-items-center rounded-xl bg-slate-50 sm:w-40">
               {(product.imageUrl ?? product.image) ? <img src={product.imageUrl ?? product.image} alt={title} className="h-full w-full object-contain p-3" /> : <Package size={40} className="text-slate-300" />}
@@ -76,7 +103,7 @@ export default function ProductModal({ product, isOpen, onClose }) {
               <div className="text-sm text-blue-900">Estimated savings vs. highest marketplace: <strong className="block text-xl">{money(Math.max(0, perUnitSavings) * quantity)}</strong><span className="text-xs">({money(Math.max(0, perUnitSavings))} × {quantity} units)</span></div>
             </div>
           </section>
-          <div className="mt-6"><PriceChartPlaceholder title="Price trend (illustrative)" /></div>
+          <div className="mt-6"><PriceChartPlaceholder key={historyKey} productId={product.id ?? product._id} product={product} /></div>
         </div>
       </section>
     </div>
