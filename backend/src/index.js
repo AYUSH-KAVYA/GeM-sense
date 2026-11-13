@@ -20,32 +20,36 @@ app.use(
 app.use(express.json());
 
 // ── Routes ───────────────────────────────────────────────────────────
+// Mount product comparison and search routes
 app.use("/api/products", productRoutes);
 
-// Health-check endpoint
-app.get("/health", (_req, res) => {
+// Health check endpoints (/api/health and /health)
+const handleHealth = (_req, res) => {
   res.json({
     status: "ok",
-    service: "GeM-sense Backend API",
-    uptime: process.uptime(),
     timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
   });
-});
+};
 
-// Root info
+app.get("/api/health", handleHealth);
+app.get("/health", handleHealth);
+
+// Root information endpoint
 app.get("/", (_req, res) => {
   res.json({
     message: "GeM-sense API is running",
     endpoints: {
-      health: "/health",
+      health: "/api/health",
       allProducts: "/api/products",
       search: "/api/products/search?q={query}",
-      productById: "/api/products/:id",
+      productHistory: "/api/products/:id/history",
+      refreshPrice: "POST /api/products/:id/refresh",
     },
   });
 });
 
-// ── 404 handler ──────────────────────────────────────────────────────
+// ── 404 Handler ──────────────────────────────────────────────────────
 app.use((_req, res) => {
   res.status(404).json({
     success: false,
@@ -53,10 +57,10 @@ app.use((_req, res) => {
   });
 });
 
-// ── Global error handler ─────────────────────────────────────────────
+// ── Global Error Handler ─────────────────────────────────────────────
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
-  console.error("[Error]", err.stack || err.message || err);
+  console.error("[Server Error]", err.stack || err.message || err);
   res.status(err.status || 500).json({
     success: false,
     message:
@@ -66,13 +70,14 @@ app.use((err, _req, res, _next) => {
   });
 });
 
-// ── Start server ─────────────────────────────────────────────────────
+// ── Start Server ─────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n🚀 GeM-sense Backend running on http://localhost:${PORT}`);
-  console.log(`   ├─ Health:   http://localhost:${PORT}/health`);
+  console.log(`   ├─ Health:   http://localhost:${PORT}/api/health`);
   console.log(`   ├─ Products: http://localhost:${PORT}/api/products`);
   console.log(`   ├─ Search:   http://localhost:${PORT}/api/products/search?q=printer`);
-  console.log(`   └─ By ID:    http://localhost:${PORT}/api/products/1\n`);
+  console.log(`   ├─ History:  http://localhost:${PORT}/api/products/1/history`);
+  console.log(`   └─ Refresh:  POST http://localhost:${PORT}/api/products/1/refresh\n`);
 });
 
 export default app;
