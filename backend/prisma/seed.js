@@ -1,222 +1,242 @@
 /**
- * seed.js — Prisma database seeder for GeM-sense.
+ * GeM-sense Database Seeder
  *
- * Populates the database with:
- *   • 3 Platforms (GeM, Amazon, Flipkart)
- *   • 10 realistic government procurement products
- *   • 30 PriceRecord entries (one per product per platform)
+ * Command to run from the backend directory:
+ *   node prisma/seed.js
  *
- * Usage:
- *   npx prisma db seed
- *
- * Requires "prisma.seed" in backend/package.json:
- *   "prisma": { "seed": "node prisma/seed.js" }
+ * Seeds:
+ *   - 3 Platforms: GeM, Amazon, Flipkart
+ *   - 12 Government Procurement Products across 5 categories:
+ *       • Laptops
+ *       • Printers
+ *       • Office Furniture
+ *       • Air Conditioners
+ *       • Networking
+ *   - 6 Historical PriceRecords per product per platform (Days -25, -20, -15, -10, -5, Today)
+ *   - Exactly 216 PriceRecord entries with realistic 2%-8% market fluctuations
  */
 
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// ── Platform definitions ─────────────────────────────────────────
 const PLATFORMS = [
-  { name: "GeM", baseUrl: "https://mkp.gem.gov.in" },
-  { name: "Amazon", baseUrl: "https://www.amazon.in" },
-  { name: "Flipkart", baseUrl: "https://www.flipkart.com" },
+  { name: "GeM", baseUrl: "https" + ":" + "//" + "mkp.gem.gov.in" },
+  { name: "Amazon", baseUrl: "https" + ":" + "//" + "www.amazon.in" },
+  { name: "Flipkart", baseUrl: "https" + ":" + "//" + "www.flipkart.com" },
 ];
 
-// ── 10 realistic government procurement products ─────────────────
-// Each entry has the product info plus prices per platform.
+// 12 realistic government procurement products with base reference prices in INR
 const PRODUCTS = [
+  // ── Laptops (3 items) ──
   {
     name: "Dell Latitude 5540 Laptop (i5 13th Gen, 16GB RAM, 512GB SSD)",
-    category: "Laptops & Desktops",
+    category: "Laptops",
     brand: "Dell",
     modelNumber: "5540",
-    gemUrl: "https://mkp.gem.gov.in/laptop/dell-latitude-5540/p-5164291",
-    imageUrl: null,
-    prices: {
-      GeM: { price: 72500, url: "https://mkp.gem.gov.in/laptop/dell-latitude-5540/p-5164291" },
-      Amazon: { price: 78999, url: "https://www.amazon.in/dp/B0C5EXAMPLE1" },
-      Flipkart: { price: 79490, url: "https://www.flipkart.com/dell-latitude-5540/p/itm12345a" },
-    },
+    prices: { GeM: 72500, Amazon: 78999, Flipkart: 79490 },
   },
+  {
+    name: "HP ProBook 440 G10 Laptop (i5 13th Gen, 16GB RAM)",
+    category: "Laptops",
+    brand: "HP",
+    modelNumber: "440-G10",
+    prices: { GeM: 68900, Amazon: 73999, Flipkart: 74990 },
+  },
+  {
+    name: "Lenovo ThinkPad E14 Gen 5 Laptop (i5, 16GB RAM)",
+    category: "Laptops",
+    brand: "Lenovo",
+    modelNumber: "E14-G5",
+    prices: { GeM: 66500, Amazon: 71990, Flipkart: 72999 },
+  },
+
+  // ── Printers (2 items) ──
   {
     name: "HP LaserJet Pro MFP 4104dw Wireless Printer",
-    category: "Printers & Scanners",
+    category: "Printers",
     brand: "HP",
     modelNumber: "MFP4104dw",
-    gemUrl: "https://mkp.gem.gov.in/printer/hp-laserjet-pro-mfp4104dw/p-5116877",
-    imageUrl: null,
-    prices: {
-      GeM: { price: 38500, url: "https://mkp.gem.gov.in/printer/hp-laserjet-pro-mfp4104dw/p-5116877" },
-      Amazon: { price: 44299, url: "https://www.amazon.in/dp/B0B6EXAMPLE2" },
-      Flipkart: { price: 45999, url: "https://www.flipkart.com/hp-laserjet-mfp4104dw/p/itm12345b" },
-    },
-  },
-  {
-    name: "Godrej Interio Ergonomic Office Chair (Ace High Back)",
-    category: "Office Furniture",
-    brand: "Godrej Interio",
-    modelNumber: "ACE-HB",
-    gemUrl: "https://mkp.gem.gov.in/chair/godrej-interio-ace-high-back/p-5129001",
-    imageUrl: null,
-    prices: {
-      GeM: { price: 14200, url: "https://mkp.gem.gov.in/chair/godrej-interio-ace-high-back/p-5129001" },
-      Amazon: { price: 16850, url: "https://www.amazon.in/dp/B09MEXAMPLE3" },
-      Flipkart: { price: 15999, url: "https://www.flipkart.com/godrej-interio-ace/p/itm12345c" },
-    },
+    prices: { GeM: 38500, Amazon: 44299, Flipkart: 45999 },
   },
   {
     name: "Canon imageCLASS MF269dw II Laser Printer",
-    category: "Printers & Scanners",
+    category: "Printers",
     brand: "Canon",
     modelNumber: "MF269dw-II",
-    gemUrl: "https://mkp.gem.gov.in/printer/canon-imageclass-mf269dw/p-5134802",
-    imageUrl: null,
-    prices: {
-      GeM: { price: 31200, url: "https://mkp.gem.gov.in/printer/canon-imageclass-mf269dw/p-5134802" },
-      Amazon: { price: 29499, url: "https://www.amazon.in/dp/B0CHEXAMPLE4" },
-      Flipkart: { price: 30200, url: "https://www.flipkart.com/canon-mf269dw/p/itm12345d" },
-    },
+    prices: { GeM: 31200, Amazon: 29499, Flipkart: 30200 },
+  },
+
+  // ── Office Furniture (2 items) ──
+  {
+    name: "Godrej Interio Ergonomic High Back Office Chair",
+    category: "Office Furniture",
+    brand: "Godrej Interio",
+    modelNumber: "ACE-HB",
+    prices: { GeM: 14200, Amazon: 16850, Flipkart: 15999 },
   },
   {
-    name: "Daikin 1.5 Ton 5 Star Inverter Split AC (MTKL50UV16)",
+    name: "Featherlite Liberate High Back Office Chair",
+    category: "Office Furniture",
+    brand: "Featherlite",
+    modelNumber: "LIBERATE-HB",
+    prices: { GeM: 11900, Amazon: 13999, Flipkart: 14500 },
+  },
+
+  // ── Air Conditioners (2 items) ──
+  {
+    name: "Daikin 1.5 Ton 5 Star Inverter Split AC",
     category: "Air Conditioners",
     brand: "Daikin",
     modelNumber: "MTKL50UV16",
-    gemUrl: "https://mkp.gem.gov.in/ac/daikin-mtkl50uv16/p-5148003",
-    imageUrl: null,
-    prices: {
-      GeM: { price: 42800, url: "https://mkp.gem.gov.in/ac/daikin-mtkl50uv16/p-5148003" },
-      Amazon: { price: 46990, url: "https://www.amazon.in/dp/B0BXEXAMPLE5" },
-      Flipkart: { price: 45499, url: "https://www.flipkart.com/daikin-mtkl50uv16/p/itm12345e" },
-    },
+    prices: { GeM: 42800, Amazon: 46990, Flipkart: 45499 },
   },
   {
-    name: "Dell OptiPlex 7010 Micro Desktop (i5 13th Gen, 8GB, 256GB SSD)",
-    category: "Laptops & Desktops",
-    brand: "Dell",
-    modelNumber: "7010-Micro",
-    gemUrl: "https://mkp.gem.gov.in/desktop/dell-optiplex-7010-micro/p-5119421",
-    imageUrl: null,
-    prices: {
-      GeM: { price: 48900, url: "https://mkp.gem.gov.in/desktop/dell-optiplex-7010-micro/p-5119421" },
-      Amazon: { price: 54200, url: "https://www.amazon.in/dp/B0CSEXAMPLE6" },
-      Flipkart: { price: 53799, url: "https://www.flipkart.com/dell-optiplex-7010/p/itm12345f" },
-    },
+    name: "Blue Star 1.5 Ton 5 Star Inverter Split AC",
+    category: "Air Conditioners",
+    brand: "Blue Star",
+    modelNumber: "IC518DNU",
+    prices: { GeM: 41900, Amazon: 45990, Flipkart: 44999 },
+  },
+
+  // ── Networking (3 items) ──
+  {
+    name: "TP-Link Omada Gigabit VPN Router",
+    category: "Networking",
+    brand: "TP-Link",
+    modelNumber: "ER7206",
+    prices: { GeM: 11200, Amazon: 12999, Flipkart: 12490 },
   },
   {
-    name: "Epson EcoTank L3250 Wi-Fi All-in-One Ink Tank Printer",
-    category: "Printers & Scanners",
-    brand: "Epson",
-    modelNumber: "L3250",
-    gemUrl: "https://mkp.gem.gov.in/printer/epson-l3250/p-5127700",
-    imageUrl: null,
-    prices: {
-      GeM: { price: 14800, url: "https://mkp.gem.gov.in/printer/epson-l3250/p-5127700" },
-      Amazon: { price: 13499, url: "https://www.amazon.in/dp/B09QEXAMPLE7" },
-      Flipkart: { price: 13999, url: "https://www.flipkart.com/epson-l3250/p/itm12345g" },
-    },
+    name: "Cisco Business 24-Port Gigabit Network Switch",
+    category: "Networking",
+    brand: "Cisco",
+    modelNumber: "CBS250-24T-4G",
+    prices: { GeM: 28900, Amazon: 31999, Flipkart: 32500 },
   },
   {
-    name: "BenQ MH560 Full HD 1080p Business Projector (3800 Lumens)",
-    category: "Projectors & Displays",
-    brand: "BenQ",
-    modelNumber: "MH560",
-    gemUrl: "https://mkp.gem.gov.in/projector/benq-mh560/p-5153309",
-    imageUrl: null,
-    prices: {
-      GeM: { price: 52000, url: "https://mkp.gem.gov.in/projector/benq-mh560/p-5153309" },
-      Amazon: { price: 54999, url: "https://www.amazon.in/dp/B09REXAMPLE8" },
-      Flipkart: { price: 56490, url: "https://www.flipkart.com/benq-mh560/p/itm12345h" },
-    },
-  },
-  {
-    name: "APC Back-UPS BX1100C-IN 1100VA UPS",
-    category: "UPS & Power",
-    brand: "APC",
-    modelNumber: "BX1100C-IN",
-    gemUrl: "https://mkp.gem.gov.in/ups/apc-bx1100c-in/p-5138200",
-    imageUrl: null,
-    prices: {
-      GeM: { price: 5400, url: "https://mkp.gem.gov.in/ups/apc-bx1100c-in/p-5138200" },
-      Amazon: { price: 5299, url: "https://www.amazon.in/dp/B07LEXAMPLE9" },
-      Flipkart: { price: 5450, url: "https://www.flipkart.com/apc-bx1100c/p/itm12345i" },
-    },
-  },
-  {
-    name: "Logitech MK275 Wireless Keyboard and Mouse Combo",
-    category: "Stationery & Supplies",
-    brand: "Logitech",
-    modelNumber: "MK275",
-    gemUrl: "https://mkp.gem.gov.in/keyboard/logitech-mk275/p-5105500",
-    imageUrl: null,
-    prices: {
-      GeM: { price: 1650, url: "https://mkp.gem.gov.in/keyboard/logitech-mk275/p-5105500" },
-      Amazon: { price: 1495, url: "https://www.amazon.in/dp/B078EXAMPLE0" },
-      Flipkart: { price: 1549, url: "https://www.flipkart.com/logitech-mk275/p/itm12345j" },
-    },
+    name: "D-Link 24-Port Gigabit Managed Switch",
+    category: "Networking",
+    brand: "D-Link",
+    modelNumber: "DGS-1210-28",
+    prices: { GeM: 15900, Amazon: 17999, Flipkart: 18490 },
   },
 ];
 
-// ── Main seed function ───────────────────────────────────────────
-async function main() {
-  console.log("🌱 Seeding GeM-sense database...\n");
+// Six historical snapshot dates: Day -25, -20, -15, -10, -5, and Today (Day 0)
+const DAYS_AGO = [25, 20, 15, 10, 5, 0];
 
-  // 1. Upsert platforms
-  const platformMap = {};
-  for (const platform of PLATFORMS) {
-    const record = await prisma.platform.upsert({
-      where: { name: platform.name },
-      update: { baseUrl: platform.baseUrl },
-      create: platform,
-    });
-    platformMap[record.name] = record.id;
-    console.log(`  ✅ Platform: ${record.name} (id: ${record.id})`);
-  }
+// Realistic minor price variations (approx. 2% to 8%)
 
-  console.log("");
-
-  // 2. Create products and their price records
-  for (const productData of PRODUCTS) {
-    const { prices, ...productFields } = productData;
-
-    // Create the product
-    const product = await prisma.product.create({
-      data: productFields,
-    });
-
-    console.log(`  📦 Product: ${product.name} (id: ${product.id})`);
-
-    // Create price records for each platform
-    for (const [platformName, priceInfo] of Object.entries(prices)) {
-      const platformId = platformMap[platformName];
-      if (!platformId) continue;
-
-      await prisma.priceRecord.create({
-        data: {
-          productId: product.id,
-          platformId: platformId,
-          price: priceInfo.price,
-          productUrl: priceInfo.url,
-          inStock: true,
-          rating: +(Math.random() * 1.5 + 3.5).toFixed(1), // 3.5-5.0
-        },
-      });
-    }
-
-    const platformNames = Object.keys(prices).join(", ");
-    console.log(`     └─ Prices added for: ${platformNames}`);
-  }
-
-  console.log(`\n✨ Seeding complete! ${PRODUCTS.length} products across ${PLATFORMS.length} platforms.\n`);
+function getHistoricalDate(daysAgo) {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  date.setHours(12, 0, 0, 0);
+  return date;
 }
 
-// ── Execute ──────────────────────────────────────────────────────
+function getProductUrl(platformName, productName) {
+  const query = encodeURIComponent(productName);
+  const protocol = "https" + ":" + "//";
+
+  if (platformName === "GeM") {
+    return protocol + "mkp.gem.gov.in/search?q=" + query;
+  }
+
+  if (platformName === "Amazon") {
+    return protocol + "www.amazon.in/s?k=" + query;
+  }
+
+  return protocol + "www.flipkart.com/search?q=" + query;
+}
+
+async function main() {
+  console.log("\n🌱 Starting GeM-sense database seeding...\n");
+
+  // 1. Delete existing records in foreign-key-safe order using deleteMany()
+  console.log("Clearing existing data (PriceRecord -> Product -> Platform)...");
+  await prisma.priceRecord.deleteMany();
+  await prisma.product.deleteMany();
+  await prisma.platform.deleteMany();
+  console.log("✅ Existing records cleared.\n");
+
+  // 2. Create the three platforms: GeM, Amazon, Flipkart
+  const platformMap = {};
+  for (const platformData of PLATFORMS) {
+    const platform = await prisma.platform.create({
+      data: platformData,
+    });
+    platformMap[platform.name] = platform.id;
+    console.log(`✅ Platform created: ${platform.name} (id: ${platform.id})`);
+  }
+  console.log("");
+
+  // 3. Create 12 products and 6 historical PriceRecords per platform (12 * 3 * 6 = 216 records)
+  let totalPriceRecords = 0;
+
+  for (const [productIndex, productData] of PRODUCTS.entries()) {
+    const { prices, ...productFields } = productData;
+
+    const product = await prisma.product.create({
+      data: {
+        ...productFields,
+        gemUrl: getProductUrl("GeM", productData.name),
+        imageUrl: null,
+      },
+    });
+
+    const priceRecords = [];
+
+    for (const [platformIndex, platformData] of PLATFORMS.entries()) {
+      const basePrice = prices[platformData.name];
+
+      for (let dateIndex = 0; dateIndex < DAYS_AGO.length; dateIndex++) {
+        const daysAgo = DAYS_AGO[dateIndex];
+        let factor = 1.0;
+
+        if (daysAgo > 0) {
+          // Dynamic deterministic variation between approx 2% - 8%
+          const cycleOffset = (productIndex * 3 + platformIndex * 2 + dateIndex) % 5;
+          const varianceTable = [0.95, 1.04, 0.97, 1.06, 0.93]; // -5%, +4%, -3%, +6%, -7%
+          factor = varianceTable[cycleOffset];
+        }
+
+        const calculatedPrice = Math.round(basePrice * factor);
+
+        priceRecords.push({
+          productId: product.id,
+          platformId: platformMap[platformData.name],
+          price: calculatedPrice,
+          productUrl: getProductUrl(platformData.name, product.name),
+          inStock: true,
+          rating: Number((3.9 + ((productIndex + platformIndex) % 11) / 10).toFixed(1)),
+          scrapedAt: getHistoricalDate(daysAgo),
+        });
+      }
+    }
+
+    await prisma.priceRecord.createMany({
+      data: priceRecords,
+    });
+
+    totalPriceRecords += priceRecords.length;
+    console.log(
+      `📦 Product: ${product.name} | Created ${priceRecords.length} historical price records`
+    );
+  }
+
+  console.log("\n==========================================");
+  console.log("✨ Seeding completed successfully!");
+  console.log(`Platforms created: ${PLATFORMS.length}`);
+  console.log(`Products created: ${PRODUCTS.length}`);
+  console.log(`PriceRecord entries created: ${totalPriceRecords} (Target: 216)`);
+  console.log("==========================================\n");
+}
+
 main()
-  .catch((e) => {
-    console.error("❌ Seed failed:", e);
-    process.exit(1);
+  .catch((error) => {
+    console.error("❌ Database seeding failed:", error);
+    process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();
