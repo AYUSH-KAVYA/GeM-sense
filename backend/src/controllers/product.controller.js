@@ -380,8 +380,24 @@ export async function refreshProductPrice(req, res, next) {
     // 2. Force fresh multi-platform scrape bypassing cache TTL
     const scrapedResults = await scrapeAllPlatforms(existingProduct.name);
 
+    // Find closest product match or take the first result
+    const matchedProduct = Array.isArray(scrapedResults)
+      ? scrapedResults.find(
+          (p) =>
+            (p.modelNumber && p.modelNumber === existingProduct.modelNumber) ||
+            p.name === existingProduct.name
+        ) || scrapedResults[0]
+      : scrapedResults;
+
+    const priceList =
+      matchedProduct?.latestPrices ||
+      matchedProduct?.prices ||
+      (Array.isArray(scrapedResults) && typeof scrapedResults[0]?.price === "number"
+        ? scrapedResults
+        : []);
+
     // 3. Insert new PriceRecord entries with current timestamp into PostgreSQL
-    for (const scraped of scrapedResults) {
+    for (const scraped of priceList) {
       if (typeof scraped.price !== "number" || scraped.price <= 0) continue;
 
       const platform = await ensurePlatform(scraped.platform);
@@ -391,7 +407,7 @@ export async function refreshProductPrice(req, res, next) {
           productId: existingProduct.id,
           platformId: platform.id,
           price: scraped.price,
-          productUrl: scraped.productUrl,
+          productUrl: scraped.productUrl || existingProduct.gemUrl,
           inStock: scraped.inStock ?? true,
           rating: scraped.rating ?? null,
         },
