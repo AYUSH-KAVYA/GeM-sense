@@ -4,16 +4,10 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
   timeout: 10000,
 });
 
-/**
- * Fetch all tracked products with latest platform prices
- * @returns {Promise<object>} API response containing array of products
- */
 export const fetchProducts = async () => {
   try {
     const response = await apiClient.get('/products');
@@ -24,16 +18,9 @@ export const fetchProducts = async () => {
   }
 };
 
-/**
- * Search products by keyword query (?q=...)
- * @param {string} query - Keyword search term
- * @returns {Promise<object>} API response containing search results
- */
 export const searchProducts = async (query) => {
   try {
-    const response = await apiClient.get('/products/search', {
-      params: { q: query },
-    });
+    const response = await apiClient.get('/products/search', { params: { q: query } });
     return response.data;
   } catch (error) {
     console.error(`[API] Error searching products for "${query}":`, error);
@@ -41,11 +28,6 @@ export const searchProducts = async (query) => {
   }
 };
 
-/**
- * Fetch a single product with full historical price records for charts
- * @param {string|number} id - Product ID
- * @returns {Promise<object>} API response containing product & price history
- */
 export const fetchProductById = async (id) => {
   try {
     const response = await apiClient.get(`/products/${id}`);
@@ -56,8 +38,24 @@ export const fetchProductById = async (id) => {
   }
 };
 
-export default {
-  fetchProducts,
-  searchProducts,
-  fetchProductById,
+export const fetchProductHistory = async (productId) => {
+  try {
+    const response = await apiClient.get(`/products/${productId}/history`);
+    return response.data;
+  } catch (error) {
+    console.error(`[API] Error fetching history for product #${productId}:`, error);
+    throw error;
+  }
 };
+
+export const refreshProductPrice = async (productId) => {
+  try {
+    const response = await apiClient.post(`/products/${productId}/refresh`);
+    return response.data;
+  } catch (error) {
+    console.error(`[API] Error refreshing prices for product #${productId}:`, error);
+    throw error;
+  }
+};
+
+export default { fetchProducts, searchProducts, fetchProductById, fetchProductHistory, refreshProductPrice };
