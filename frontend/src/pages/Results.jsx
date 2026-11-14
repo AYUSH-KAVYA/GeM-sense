@@ -1,111 +1,223 @@
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import ProductCard from '../components/ProductCard.jsx';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { AlertCircle, ArrowLeft, Search } from 'lucide-react';
+import AnalyticsBanner from '../components/AnalyticsBanner.jsx';
+import EmptyErrorState from '../components/EmptyErrorState.jsx';
+import FilterSidebar, { DEFAULT_FILTERS } from '../components/FilterSidebar.jsx';
+import LoadingSkeleton from '../components/LoadingSkeleton.jsx';
 import PriceChartPlaceholder from '../components/PriceChartPlaceholder.jsx';
+import ProductCard from '../components/ProductCard.jsx';
 import { fetchProducts, searchProducts } from '../services/api.js';
-import { Search, SlidersHorizontal, AlertCircle } from 'lucide-react';
 
-// Local fallback keeps the dashboard usable before the API is connected.
-const MOCK_PRODUCTS = [
-  { id: 'GEM-001', title: 'HP LaserJet Pro Monochrome Printer', category: 'Printers', modelNumber: 'M404dn', gemPrice: 18999, competitors: { amazon: { price: 21499, url: 'https://www.amazon.in/' }, flipkart: { price: 20999, url: 'https://www.flipkart.com/' } } },
-  { id: 'GEM-002', title: 'Logitech Wireless Keyboard and Mouse Combo', category: 'Computer accessories', modelNumber: 'MK270', gemPrice: 1599, competitors: { amazon: { price: 1799, url: 'https://www.amazon.in/' }, flipkart: { price: 1699, url: 'https://www.flipkart.com/' } } },
-  { id: 'GEM-003', title: 'Dell 24-inch Full HD Monitor', category: 'Monitors', modelNumber: 'SE2422H', gemPrice: 8999, competitors: { amazon: { price: 8499, url: 'https://www.amazon.in/' }, flipkart: { price: 9299, url: 'https://www.flipkart.com/' } } },
+const FALLBACK_PRODUCTS = [
+  { id: 1, name: 'Dell Latitude 5540 Laptop (i5 13th Gen, 16GB RAM, 512GB SSD)', category: 'Laptops', brand: 'Dell', modelNumber: '5540', gemUrl: 'https://mkp.gem.gov.in', latestPrices: [{ platform: 'GeM', price: 72500, productUrl: 'https://mkp.gem.gov.in', inStock: true }, { platform: 'Amazon', price: 78999, productUrl: 'https://amazon.in', inStock: true }, { platform: 'Flipkart', price: 79490, productUrl: 'https://flipkart.com', inStock: true }] },
+  { id: 2, name: 'HP LaserJet Pro MFP 4104dw Wireless All-in-One Printer', category: 'Printers', brand: 'HP', modelNumber: 'MFP4104dw', gemUrl: 'https://mkp.gem.gov.in', latestPrices: [{ platform: 'GeM', price: 38500, productUrl: 'https://mkp.gem.gov.in', inStock: true }, { platform: 'Amazon', price: 44299, productUrl: 'https://amazon.in', inStock: true }, { platform: 'Flipkart', price: 45999, productUrl: 'https://flipkart.com', inStock: true }] },
+  { id: 3, name: 'Godrej Interio Ergonomic Office Chair (Ace High Back)', category: 'Office Furniture', brand: 'Godrej Interio', modelNumber: 'ACE-HB', gemUrl: 'https://mkp.gem.gov.in', latestPrices: [{ platform: 'GeM', price: 14200, productUrl: 'https://mkp.gem.gov.in', inStock: true }, { platform: 'Amazon', price: 16850, productUrl: 'https://amazon.in', inStock: true }, { platform: 'Flipkart', price: 15999, productUrl: 'https://flipkart.com', inStock: true }] },
+  { id: 4, name: 'Canon imageCLASS MF269dw II Laser Multifunction Printer', category: 'Printers', brand: 'Canon', modelNumber: 'MF269dw-II', gemUrl: 'https://mkp.gem.gov.in', latestPrices: [{ platform: 'GeM', price: 31200, productUrl: 'https://mkp.gem.gov.in', inStock: true }, { platform: 'Amazon', price: 29499, productUrl: 'https://amazon.in', inStock: true }, { platform: 'Flipkart', price: 30200, productUrl: 'https://flipkart.com', inStock: true }] },
+  { id: 5, name: 'Daikin 1.5 Ton 5 Star Inverter Split Air Conditioner', category: 'Air Conditioners', brand: 'Daikin', modelNumber: 'MTKL50UV16', gemUrl: 'https://mkp.gem.gov.in', latestPrices: [{ platform: 'GeM', price: 42800, productUrl: 'https://mkp.gem.gov.in', inStock: true }, { platform: 'Amazon', price: 46990, productUrl: 'https://amazon.in', inStock: true }, { platform: 'Flipkart', price: 45499, productUrl: 'https://flipkart.com', inStock: true }] },
+  { id: 6, name: 'Dell OptiPlex 7010 Micro Desktop (Intel i5, 8GB, 256GB SSD)', category: 'Laptops', brand: 'Dell', modelNumber: '7010-Micro', gemUrl: 'https://mkp.gem.gov.in', latestPrices: [{ platform: 'GeM', price: 48900, productUrl: 'https://mkp.gem.gov.in', inStock: true }, { platform: 'Amazon', price: 54200, productUrl: 'https://amazon.in', inStock: true }, { platform: 'Flipkart', price: 53799, productUrl: 'https://flipkart.com', inStock: true }] },
 ];
 
-function normalizeProducts(data) {
+const getPlatformName = (platform) => (
+  typeof platform === 'string' ? platform : platform?.name
+);
+
+function normalizeProducts(response) {
+  const data = Array.isArray(response) ? response : response?.data ?? response?.results;
   if (!Array.isArray(data)) return [];
   return data.map((item, index) => ({
     ...item,
     id: item.id ?? item._id ?? item.product_id ?? `product-${index}`,
+    name: item.name ?? item.title ?? 'Untitled product',
+    modelNumber: item.modelNumber ?? item.model_number,
     gemPrice: item.gemPrice ?? item.gem_price ?? item.price,
   }));
 }
 
 function getFallbackProducts(query) {
   const searchTerm = query.trim().toLowerCase();
-  if (!searchTerm) return MOCK_PRODUCTS;
-  return MOCK_PRODUCTS.filter((product) => (
-    [product.title, product.category, product.modelNumber]
-      .some((value) => value.toLowerCase().includes(searchTerm))
+  if (!searchTerm) return FALLBACK_PRODUCTS;
+  return FALLBACK_PRODUCTS.filter((product) => (
+    [product.name, product.category, product.brand, product.modelNumber]
+      .some((value) => value?.toLowerCase().includes(searchTerm))
   ));
 }
 
-export default function Results() {
-  const [searchParams] = useSearchParams();
-  const query = searchParams.get('q') || '';
+function getPrices(product) {
+  const records = Array.isArray(product.latestPrices)
+    ? product.latestPrices
+    : Array.isArray(product.price_records)
+      ? product.price_records
+      : [];
+  const normalized = records.map((record) => ({
+    platform: getPlatformName(record.platform) || 'Unknown',
+    price: Number(record.price),
+  }));
+  const hasGem = normalized.some((record) => record.platform.toLowerCase() === 'gem');
+  if (!hasGem) {
+    const gemPrice = Number(product.gemPrice ?? product.gem_price ?? product.price);
+    if (Number.isFinite(gemPrice) && gemPrice > 0) normalized.push({ platform: 'GeM', price: gemPrice });
+  }
+  const competitors = product.competitors ?? {};
+  for (const [platform, item] of Object.entries(competitors)) {
+    if (!normalized.some((record) => record.platform.toLowerCase() === platform.toLowerCase())) {
+      const price = Number(item?.price);
+      if (Number.isFinite(price) && price > 0) normalized.push({ platform, price });
+    }
+  }
+  return normalized.filter((record) => Number.isFinite(record.price) && record.price > 0);
+}
 
+export default function Results() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const query = searchParams.get('q') || '';
+  const [searchInput, setSearchInput] = useState(query);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [apiFallback, setApiFallback] = useState(false);
+  const [usingFallback, setUsingFallback] = useState(false);
   const [error, setError] = useState('');
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const requestId = useRef(0);
 
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      setLoading(true);
-      setError('');
-      try {
-        const response = query.trim() ? await searchProducts(query.trim()) : await fetchProducts();
-        if (!active) return;
-        const normalized = normalizeProducts(response);
-        setProducts(normalized.length ? normalized : getFallbackProducts(query));
-        setApiFallback(!normalized.length);
-      } catch {
-        if (!active) return;
+  useEffect(() => setSearchInput(query), [query]);
+
+  const loadProducts = useCallback(async () => {
+    const currentRequestId = ++requestId.current;
+    setLoading(true);
+    setError('');
+    try {
+      const response = query.trim()
+        ? await searchProducts(query.trim())
+        : await fetchProducts();
+      const normalized = normalizeProducts(response);
+      if (currentRequestId !== requestId.current) return;
+      if (normalized.length) {
+        setProducts(normalized);
+        setUsingFallback(false);
+      } else {
         setProducts(getFallbackProducts(query));
-        setApiFallback(true);
-        setError('Backend is unavailable. Showing sample products so you can explore the dashboard.');
-      } finally {
-        if (active) setLoading(false);
+        setUsingFallback(true);
       }
+    } catch (loadError) {
+      if (currentRequestId !== requestId.current) return;
+      setProducts(getFallbackProducts(query));
+      setUsingFallback(true);
+      setError(loadError?.message || 'Backend is unavailable. Showing sample products.');
+    } finally {
+      if (currentRequestId === requestId.current) setLoading(false);
     }
-    load();
-    return () => { active = false; };
   }, [query]);
 
-  const visibleProducts = products;
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
+  const handleSearchSubmit = (event) => {
+    event.preventDefault();
+    const nextQuery = searchInput.trim();
+    setSearchParams(nextQuery ? { q: nextQuery } : {});
+    setFilters((current) => ({ ...current, search: '' }));
+  };
+
+  const filteredProducts = useMemo(() => products
+    .filter((product) => {
+      const selectedCategories = filters.categories ?? [filters.category ?? 'All'];
+      const categoryMatches = selectedCategories.includes('All')
+        || selectedCategories.includes('All Categories')
+        || selectedCategories.some((category) => product.category?.toLowerCase().includes(category.toLowerCase()));
+      const prices = getPrices(product);
+      const maxPrice = Number(filters.maxPrice);
+      const priceMatches = !Number.isFinite(maxPrice)
+        || prices.some((record) => record.price <= maxPrice);
+      const gem = prices.find((record) => record.platform.toLowerCase() === 'gem')?.price;
+      const competitorPrices = prices
+        .filter((record) => record.platform.toLowerCase() !== 'gem')
+        .map((record) => record.price);
+      const gemCheaperMatches = !filters.gemCheaperOnly
+        || (gem != null && competitorPrices.length > 0 && gem <= Math.min(...competitorPrices));
+      const searchTerm = (filters.search ?? '').trim().toLowerCase();
+      const searchMatches = !searchTerm
+        || [product.name, product.category, product.brand, product.modelNumber]
+          .some((value) => value?.toLowerCase().includes(searchTerm));
+      return categoryMatches && priceMatches && gemCheaperMatches && searchMatches;
+    })
+    .sort((a, b) => {
+      const pricesA = getPrices(a);
+      const pricesB = getPrices(b);
+      const minA = Math.min(...pricesA.map((record) => record.price), Infinity);
+      const minB = Math.min(...pricesB.map((record) => record.price), Infinity);
+      const gemA = pricesA.find((record) => record.platform.toLowerCase() === 'gem')?.price ?? 0;
+      const gemB = pricesB.find((record) => record.platform.toLowerCase() === 'gem')?.price ?? 0;
+      const compsA = pricesA.filter((record) => record.platform.toLowerCase() !== 'gem');
+      const compsB = pricesB.filter((record) => record.platform.toLowerCase() !== 'gem');
+      const savingsA = compsA.length ? Math.max(...compsA.map((record) => (record.price - gemA) / record.price)) : 0;
+      const savingsB = compsB.length ? Math.max(...compsB.map((record) => (record.price - gemB) / record.price)) : 0;
+      if (filters.sortBy === 'price_asc') return minA - minB;
+      if (filters.sortBy === 'price_desc') return minB - minA;
+      if (filters.sortBy === 'rating_desc') return (Number(b.rating) || 0) - (Number(a.rating) || 0);
+      return savingsB - savingsA;
+    }), [products, filters]);
+
+  const quickSearch = (nextQuery) => {
+    setSearchInput(nextQuery);
+    setSearchParams({ q: nextQuery });
+  };
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800"><Search size={13} /> Price intelligence</div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">Compare procurement prices</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">See GeM listings alongside marketplace prices to make informed purchasing decisions.</p>
+    <div className="space-y-6">
+      <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+          <div>
+            <Link to="/" className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 transition-colors hover:text-gem-700">
+              <ArrowLeft className="h-3.5 w-3.5" /> Back to Overview
+            </Link>
+            <h1 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">Cross-Platform Price Comparison</h1>
+            <p className="mt-1 text-xs text-slate-500">Comparing GeM portal rate contracts with Amazon India and Flipkart pricing</p>
+          </div>
+          <form onSubmit={handleSearchSubmit} className="flex w-full max-w-md items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search product, model, or GeM URL..." className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm focus:border-gem-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gem-600" />
+            </div>
+            <button type="submit" className="rounded-xl bg-gem-700 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-gem-800">Search</button>
+          </form>
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-medium text-slate-600"><SlidersHorizontal size={15} /> Filters coming from teammate</div>
-      </div>
-
-      {error && <div role="status" className="mb-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><AlertCircle size={17} className="mt-0.5 shrink-0" />{error}</div>}
-      {apiFallback && !error && <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">Sample data is being displayed until products are returned by the API.</div>}
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-        {/* FilterSidebar integration slot — teammate's component can be mounted here. */}
-        <aside className="hidden lg:block" aria-label="Filter sidebar placeholder">
-          <div className="sticky top-24 rounded-2xl border border-dashed border-slate-300 bg-white/70 p-4">
-            <div className="flex items-center gap-2 text-sm font-bold text-slate-700"><SlidersHorizontal size={16} /> Filters</div>
-            <p className="mt-2 text-xs leading-5 text-slate-500">FilterSidebar integration slot. Replace this placeholder when the component is merged.</p>
+        {usingFallback && (
+          <div role="status" className="mt-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+            <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+            {error || 'No API products were returned — showing sample reference products.'}
           </div>
-        </aside>
+        )}
+      </header>
 
-        <section aria-label="Product results">
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm font-semibold text-slate-600">{loading ? 'Loading products…' : `${visibleProducts.length} products`}</p>
-            <span className="text-xs text-slate-400">Sort: relevance</span>
-          </div>
-          {loading ? (
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {[1, 2, 3].map((item) => <div key={item} className="h-[470px] animate-pulse rounded-2xl border border-slate-200 bg-white"><div className="h-48 rounded-t-2xl bg-slate-100" /><div className="space-y-3 p-5"><div className="h-4 w-3/4 rounded bg-slate-100" /><div className="h-3 w-1/2 rounded bg-slate-100" /><div className="mt-8 h-24 rounded-xl bg-slate-100" /></div></div>)}
-            </div>
-          ) : (
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {visibleProducts.map((product) => <ProductCard key={product.id} product={product} />)}
-            </div>
+      {!loading && filteredProducts.length > 0 && <AnalyticsBanner products={filteredProducts} />}
+
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-4">
+        <div className="lg:col-span-1">
+          <FilterSidebar filters={filters} onFilterChange={setFilters} />
+        </div>
+        <section className="min-w-0 space-y-6 lg:col-span-3" aria-label="Product results">
+          {!loading && (
+            <p className="text-sm font-semibold text-slate-600">{filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}</p>
           )}
-          {!loading && visibleProducts.length === 0 && <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">No products found. Try a different search.</div>}
-          <div className="mt-7"><PriceChartPlaceholder /></div>
+          {loading ? (
+            <LoadingSkeleton />
+          ) : filteredProducts.length === 0 ? (
+            <EmptyErrorState
+              type="empty"
+              onRetry={loadProducts}
+              onQuickSearch={quickSearch}
+            />
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {filteredProducts.map((product) => <ProductCard key={product.id} product={product} />)}
+              </div>
+              <PriceChartPlaceholder productId={filteredProducts[0].id} product={filteredProducts[0]} />
+            </>
+          )}
         </section>
       </div>
-    </main>
+    </div>
   );
 }

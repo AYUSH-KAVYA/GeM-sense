@@ -1,4 +1,5 @@
 import { ArrowUpRight, BadgeCheck, ExternalLink, Package, TrendingDown } from 'lucide-react';
+import VerdictBadge from './VerdictBadge.jsx';
 
 const formatPrice = (value) => {
   if (value == null || value === '' || !Number.isFinite(Number(value))) return '—';
@@ -21,19 +22,14 @@ const getPlatformName = (platform) => (
 );
 
 function getCompetitors(product) {
-  if (Array.isArray(product.latestPrices)) {
-    const records = product.latestPrices
-      .filter((record) => getPlatformName(record.platform)?.toLowerCase() !== 'gem')
-      .map((record, index) => ({
-        name: getPlatformName(record.platform) || `Competitor ${index + 1}`,
-        price: getPrice(record.price),
-        url: record.productUrl ?? record.url,
-      }));
-    if (records.length) return records;
-  }
+  const priceRecords = Array.isArray(product.latestPrices)
+    ? product.latestPrices
+    : Array.isArray(product.price_records)
+      ? product.price_records
+      : null;
 
-  if (Array.isArray(product.price_records)) {
-    const records = product.price_records
+  if (priceRecords) {
+    const records = priceRecords
       .filter((record) => getPlatformName(record.platform)?.toLowerCase() !== 'gem')
       .map((record, index) => ({
         name: getPlatformName(record.platform) || `Competitor ${index + 1}`,
@@ -51,8 +47,7 @@ function getCompetitors(product) {
     }];
   }
 
-  const competitors = product.competitors ?? {};
-  const entries = Object.entries(competitors).map(([name, competitor]) => ({
+  const entries = Object.entries(product.competitors ?? {}).map(([name, competitor]) => ({
     name: name.charAt(0).toUpperCase() + name.slice(1),
     price: getPrice(competitor?.price),
     url: competitor?.url,
@@ -71,31 +66,43 @@ function getCompetitors(product) {
   return entries.filter((entry) => entry.price != null || entry.url);
 }
 
+const isSafeLink = (url) => typeof url === 'string' && /^https?:\/\//i.test(url);
+
 export default function ProductCard({ product, onSelectProduct }) {
   if (!product) return null;
 
   const title = product.title ?? product.name ?? 'Untitled product';
   const image = product.imageUrl ?? product.image;
-  const gemRecord = Array.isArray(product.latestPrices)
-    ? product.latestPrices.find((record) => getPlatformName(record.platform)?.toLowerCase() === 'gem')
-    : null;
-  const gemPrice = getPrice(product.gemPrice, product.gem_price, product.price, gemRecord?.price);
+  const priceRecords = Array.isArray(product.latestPrices)
+    ? product.latestPrices
+    : Array.isArray(product.price_records)
+      ? product.price_records
+      : [];
+  const gemRecord = priceRecords
+    .find((record) => getPlatformName(record.platform)?.toLowerCase() === 'gem');
+  const gemPrice = getPrice(gemRecord?.price, product.gemPrice, product.gem_price, product.price);
   const gemUrl = product.gemUrl ?? product.gem_url ?? gemRecord?.productUrl;
   const competitors = getCompetitors(product);
-  const markets = [
-    { name: 'GeM', price: gemPrice, url: gemUrl },
-    ...competitors,
-  ];
-  const lowest = markets.reduce(
-    (best, market) => market.price != null && (!best || market.price < best.price) ? market : best,
-    null,
-  );
+  const pricedCompetitors = competitors.filter((competitor) => competitor.price != null);
+  const lowestCompetitor = pricedCompetitors.length
+    ? Math.min(...pricedCompetitors.map((competitor) => competitor.price))
+    : null;
+  const lowest = [
+    ...(gemPrice == null ? [] : [{ name: 'GeM', price: gemPrice }]),
+    ...pricedCompetitors,
+  ].reduce((best, market) => (
+    !best || market.price < best.price ? market : best
+  ), null);
   const lowestIsGem = lowest?.name === 'GeM';
   const savings = gemPrice != null && lowest && lowest.name !== 'GeM'
     ? gemPrice - lowest.price
     : 0;
   const savingsPercent = gemPrice > 0 ? (savings / gemPrice) * 100 : 0;
   const model = product.modelNumber ?? product.model_number;
+  const confidenceRaw = Number(product.matchConfidence ?? product.match_confidence);
+  const confidence = Number.isFinite(confidenceRaw)
+    ? Math.round(confidenceRaw <= 1 ? confidenceRaw * 100 : confidenceRaw)
+    : null;
 
   return (
     <article className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg">
@@ -116,10 +123,16 @@ export default function ProductCard({ product, onSelectProduct }) {
       </div>
 
       <div className="p-4 sm:p-5">
-        <h3 className="line-clamp-2 min-h-12 text-[15px] font-bold leading-6 text-ink">{title}</h3>
+        <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+          <h3 className="line-clamp-2 min-h-12 flex-1 text-[15px] font-bold leading-6 text-ink" title={title}>{title}</h3>
+          {confidence !== null && <span className="rounded-full border border-violet-100 bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-700">{confidence}% Spec Match</span>}
+        </div>
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
           {product.brand && <span>Brand: <span className="font-medium text-slate-700">{product.brand}</span></span>}
           {model && <span>Model: <span className="font-medium text-slate-700">{model}</span></span>}
+        </div>
+        <div className="mt-3">
+          <VerdictBadge gemPrice={gemPrice} competitorPrices={pricedCompetitors} verdict={product.verdict} className="max-w-full" />
         </div>
 
         <div className={`mt-4 rounded-xl border p-3.5 ${lowestIsGem ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
@@ -135,7 +148,7 @@ export default function ProductCard({ product, onSelectProduct }) {
             </p>
           )}
           {lowestIsGem && <p className="mt-1 text-xs text-emerald-700">GeM is the lowest among available listings.</p>}
-          {gemUrl && (
+          {isSafeLink(gemUrl) && (
             <a href={gemUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900">
               GeM Portal <ExternalLink size={13} />
             </a>
@@ -149,7 +162,7 @@ export default function ProductCard({ product, onSelectProduct }) {
                 <p className="text-xs font-semibold text-slate-700">{competitor.name}</p>
                 <p className="text-sm font-bold text-ink">{formatPrice(competitor.price)}</p>
               </div>
-              {competitor.url && (
+              {isSafeLink(competitor.url) && (
                 <a href={competitor.url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${competitor.name} listing`} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-navy">
                   <ExternalLink size={15} />
                 </a>
