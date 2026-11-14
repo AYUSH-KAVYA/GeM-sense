@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import SearchBar from "../components/SearchBar.jsx";
+import Footer from "../components/Footer.jsx";
 import {
   ShieldCheck,
   Search,
@@ -81,7 +82,8 @@ export default function Home() {
   const navigate = useNavigate();
 
   return (
-    <div className="space-y-20 pb-16">
+    <>
+      <div className="space-y-20 pb-16">
       {/* ═══════════════════════════════════════════════════════════
           HERO SECTION
          ═══════════════════════════════════════════════════════════ */}
@@ -243,7 +245,76 @@ export default function Home() {
       {/* ═══════════════════════════════════════════════════════════
           TRUSTED BY
          ═══════════════════════════════════════════════════════════ */}
-      <section className="max-w-4xl mx-auto text-center">
+
+      {/* Live Sample Benchmarks */}
+      <section className="max-w-7xl mx-auto px-6">
+        <div className="text-center mb-10">
+          <p className="text-sm font-semibold text-blue-600 uppercase tracking-widest">
+            Explore comparisons
+          </p>
+          <h2 className="text-3xl font-bold text-slate-900 mt-2">
+            Live Sample Benchmarks
+          </h2>
+          <p className="text-slate-500 mt-3">
+            Choose a product category to explore GeM and marketplace comparisons.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            {
+              name: "Dell Latitude Laptop",
+              category: "Laptops",
+              description: "Compare laptop listings across marketplaces.",
+              icon: Package,
+              query: "Laptops",
+            },
+            {
+              name: "HP LaserJet Printer",
+              category: "Printers",
+              description: "Explore printer prices and product alternatives.",
+              icon: Search,
+              query: "Printers",
+            },
+            {
+              name: "Godrej Interio Chair",
+              category: "Office Chairs",
+              description: "Review office furniture pricing comparisons.",
+              icon: BarChart3,
+              query: "Office+Chairs",
+            },
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.name}
+                type="button"
+                onClick={() => navigate(`/results?q=${item.query}`)}
+                className="group text-left rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-lg hover:border-blue-300 transition-all"
+              >
+                <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-5">
+                  <Icon className="w-6 h-6" />
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">
+                  {item.category}
+                </p>
+                <h3 className="text-lg font-bold text-slate-900 mt-2">
+                  {item.name}
+                </h3>
+                <p className="text-sm text-slate-500 mt-2">
+                  {item.description}
+                </p>
+                <span className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 mt-5">
+                  Compare listings
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+<section className="max-w-4xl mx-auto text-center">
         <p className="text-xs text-slate-400 uppercase tracking-widest font-semibold mb-4">
           Built for
         </p>
@@ -259,5 +330,7 @@ export default function Home() {
         </div>
       </section>
     </div>
+      <Footer />
+    </>
   );
 }
