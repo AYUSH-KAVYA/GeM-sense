@@ -1,4 +1,8 @@
-const API_URL = (process.env.API_URL || "http://localhost:5000").replace(/\/$/, "");
+import dotenv from "dotenv";
+dotenv.config();
+
+const port = process.env.PORT || 5000;
+const API_URL = (process.env.API_URL || `http://localhost:${port}`).replace(/\/$/, "");
 const TIMEOUT = 3000;
 
 async function requestJSON(path) {

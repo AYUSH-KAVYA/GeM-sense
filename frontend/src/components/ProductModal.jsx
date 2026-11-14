@@ -7,13 +7,56 @@ const money = (value) => value == null || value === '' || !Number.isFinite(Numbe
   ? '—'
   : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(Number(value));
 
+const getPlatformName = (platform) =>
+  typeof platform === 'string' ? platform : platform?.name;
+
 const getPlatforms = (product) => {
-  const gem = product?.gemPrice ?? product?.gem_price ?? product?.price;
+  const priceRecords = Array.isArray(product?.latestPrices)
+    ? product.latestPrices
+    : Array.isArray(product?.prices)
+      ? product.prices
+      : Array.isArray(product?.price_records)
+        ? product.price_records
+        : [];
+
+  const gemRecord = priceRecords.find(
+    (r) => getPlatformName(r.platform)?.toLowerCase() === 'gem'
+  );
+  const amazonRecord = priceRecords.find(
+    (r) => getPlatformName(r.platform)?.toLowerCase() === 'amazon'
+  );
+  const flipkartRecord = priceRecords.find(
+    (r) => getPlatformName(r.platform)?.toLowerCase() === 'flipkart'
+  );
+
   const competitors = product?.competitors ?? {};
+  const gemPrice = gemRecord?.price ?? product?.gemPrice ?? product?.gem_price ?? product?.price;
+
   return [
-    { key: 'gem', name: 'GeM', price: gem, url: product?.gemUrl ?? product?.gem_url, stock: product?.gemStock ?? product?.gem_stock ?? 'Check listing', rating: product?.gemRating ?? product?.gem_rating },
-    { key: 'amazon', name: 'Amazon', price: competitors.amazon?.price ?? product?.amazonPrice ?? product?.amazon_price, url: competitors.amazon?.url ?? product?.amazonUrl ?? 'https://www.amazon.in/', stock: competitors.amazon?.stock ?? product?.amazonStock ?? 'Check listing', rating: competitors.amazon?.rating ?? product?.amazonRating },
-    { key: 'flipkart', name: 'Flipkart', price: competitors.flipkart?.price ?? product?.flipkartPrice ?? product?.flipkart_price, url: competitors.flipkart?.url ?? product?.flipkartUrl ?? 'https://www.flipkart.com/', stock: competitors.flipkart?.stock ?? product?.flipkartStock ?? 'Check listing', rating: competitors.flipkart?.rating ?? product?.flipkartRating },
+    {
+      key: 'gem',
+      name: 'GeM',
+      price: gemPrice,
+      url: product?.gemUrl ?? product?.gem_url ?? gemRecord?.productUrl,
+      stock: gemRecord ? (gemRecord.inStock ? 'In Stock' : 'Out of Stock') : (product?.gemStock ?? product?.gem_stock ?? 'Check listing'),
+      rating: gemRecord?.rating ?? product?.gemRating ?? product?.gem_rating,
+    },
+    {
+      key: 'amazon',
+      name: 'Amazon',
+      price: amazonRecord?.price ?? competitors.amazon?.price ?? product?.amazonPrice ?? product?.amazon_price,
+      url: amazonRecord?.productUrl ?? competitors.amazon?.url ?? product?.amazonUrl ?? 'https://www.amazon.in/',
+      stock: amazonRecord ? (amazonRecord.inStock ? 'In Stock' : 'Out of Stock') : (competitors.amazon?.stock ?? product?.amazonStock ?? 'Check listing'),
+      rating: amazonRecord?.rating ?? competitors.amazon?.rating ?? product?.amazonRating,
+    },
+    {
+      key: 'flipkart',
+      name: 'Flipkart',
+      price: flipkartRecord?.price ?? competitors.flipkart?.price ?? product?.flipkartPrice ?? product?.flipkart_price,
+      url: flipkartRecord?.productUrl ?? competitors.flipkart?.url ?? product?.flipkartUrl ?? 'https://www.flipkart.com/',
+      stock: flipkartRecord ? (flipkartRecord.inStock ? 'In Stock' : 'Out of Stock') : (competitors.flipkart?.stock ?? product?.flipkartStock ?? 'Check listing'),
+      rating: flipkartRecord?.rating ?? competitors.flipkart?.rating ?? product?.flipkartRating,
+    },
   ];
 };
 

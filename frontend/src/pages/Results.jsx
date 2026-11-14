@@ -7,6 +7,7 @@ import FilterSidebar, { DEFAULT_FILTERS } from '../components/FilterSidebar.jsx'
 import LoadingSkeleton from '../components/LoadingSkeleton.jsx';
 import PriceChartPlaceholder from '../components/PriceChartPlaceholder.jsx';
 import ProductCard from '../components/ProductCard.jsx';
+import ProductModal from '../components/ProductModal.jsx';
 import { fetchProducts, searchProducts } from '../services/api.js';
 
 const FALLBACK_PRODUCTS = [
@@ -77,6 +78,7 @@ export default function Results() {
   const [usingFallback, setUsingFallback] = useState(false);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const requestId = useRef(0);
 
   useEffect(() => setSearchInput(query), [query]);
@@ -211,13 +213,36 @@ export default function Results() {
           ) : (
             <>
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {filteredProducts.map((product) => <ProductCard key={product.id} product={product} />)}
+                {filteredProducts.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onSelectProduct={(p) => setSelectedProduct(p)}
+                  />
+                ))}
               </div>
               <PriceChartPlaceholder productId={filteredProducts[0].id} product={filteredProducts[0]} />
             </>
           )}
         </section>
       </div>
+
+      <ProductModal
+        product={selectedProduct}
+        isOpen={Boolean(selectedProduct)}
+        onClose={() => setSelectedProduct(null)}
+        onPriceRefresh={(result, originalProduct) => {
+          const updated = result?.data || result;
+          if (updated) {
+            setProducts((prev) =>
+              prev.map((p) =>
+                p.id === (originalProduct?.id ?? updated?.id) ? { ...p, ...updated } : p
+              )
+            );
+            setSelectedProduct((prev) => (prev ? { ...prev, ...updated } : null));
+          }
+        }}
+      />
     </div>
   );
 }

@@ -121,12 +121,19 @@ function enrichProduct(product) {
 
   // Identify GeM official price vs competitor prices
   const gemPriceRecord = latestPrices.find(
-    (p) => String(p.platform).toLowerCase() === "gem"
+    (p) => String(typeof p.platform === "string" ? p.platform : p.platform?.name).toLowerCase() === "gem"
   );
   const gemPrice = gemPriceRecord ? gemPriceRecord.price : null;
 
+  const amazonRecord = latestPrices.find(
+    (p) => String(typeof p.platform === "string" ? p.platform : p.platform?.name).toLowerCase() === "amazon"
+  );
+  const flipkartRecord = latestPrices.find(
+    (p) => String(typeof p.platform === "string" ? p.platform : p.platform?.name).toLowerCase() === "flipkart"
+  );
+
   const competitorPrices = latestPrices
-    .filter((p) => String(p.platform).toLowerCase() !== "gem")
+    .filter((p) => String(typeof p.platform === "string" ? p.platform : p.platform?.name).toLowerCase() !== "gem")
     .map((p) => ({
       platform: typeof p.platform === "string" ? p.platform : p.platform?.name || "Market",
       price: p.price,
@@ -143,7 +150,7 @@ function enrichProduct(product) {
   const matchConfidences = {};
 
   const competitorRecords = latestPrices.filter(
-    (p) => String(p.platform).toLowerCase() !== "gem"
+    (p) => String(typeof p.platform === "string" ? p.platform : p.platform?.name).toLowerCase() !== "gem"
   );
 
   if (competitorRecords.length > 0) {
@@ -172,7 +179,30 @@ function enrichProduct(product) {
     verdict,
     matchConfidence: matchConfidenceScore,
     matchConfidences,
+    gemPrice,
+    amazonPrice: amazonRecord?.price ?? null,
+    flipkartPrice: flipkartRecord?.price ?? null,
+    competitors: {
+      amazon: amazonRecord
+        ? {
+            price: amazonRecord.price,
+            url: amazonRecord.productUrl,
+            inStock: amazonRecord.inStock,
+            rating: amazonRecord.rating,
+          }
+        : null,
+      flipkart: flipkartRecord
+        ? {
+            price: flipkartRecord.price,
+            url: flipkartRecord.productUrl,
+            inStock: flipkartRecord.inStock,
+            rating: flipkartRecord.rating,
+          }
+        : null,
+    },
     latestPrices,
+    prices: latestPrices,
+    platformBreakdown: latestPrices,
   };
 }
 

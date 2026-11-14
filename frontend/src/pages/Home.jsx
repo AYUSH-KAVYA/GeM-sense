@@ -1,6 +1,5 @@
 import { useNavigate } from "react-router-dom";
 import SearchBar from "../components/SearchBar.jsx";
-import Footer from "../components/Footer.jsx";
 import {
   ShieldCheck,
   Search,
@@ -82,8 +81,7 @@ export default function Home() {
   const navigate = useNavigate();
 
   return (
-    <>
-      <div className="space-y-20 pb-16">
+    <div className="space-y-20 pb-16">
       {/* ═══════════════════════════════════════════════════════════
           HERO SECTION
          ═══════════════════════════════════════════════════════════ */}
@@ -330,7 +328,5 @@ export default function Home() {
         </div>
       </section>
     </div>
-      <Footer />
-    </>
   );
 }
