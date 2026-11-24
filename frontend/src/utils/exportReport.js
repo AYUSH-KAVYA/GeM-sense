@@ -210,8 +210,12 @@ export function downloadProcurementCSV(products = []) {
   const csvContent = [headers.join(","), ...rows].join("\r\n");
   const filename = `GeM_Procurement_Audit_${getFormattedDate()}.csv`;
 
-  // Trigger browser download if running in client environment
-  if (typeof document !== "undefined" && typeof window !== "undefined") {
+  // Progressive enhancement: Trigger native OS Save Dialog in Electron, or standard browser download on web
+  if (typeof window !== "undefined" && window.electronAPI?.saveCSVFile) {
+    window.electronAPI.saveCSVFile(filename, csvContent).catch((err) => {
+      console.error("[Desktop OS] Failed to save CSV file via native dialog:", err);
+    });
+  } else if (typeof document !== "undefined" && typeof window !== "undefined") {
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
