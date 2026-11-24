@@ -10,6 +10,7 @@ import {
   Notification,
   dialog,
   ipcMain,
+  session,
 } from 'electron';
 import path from 'path';
 import fs from 'fs';
@@ -299,6 +300,33 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Allow file:// renderer requests to communicate with live API backend by adapting Origin
+  session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
+    const requestHeaders = { ...details.requestHeaders };
+    const origin = requestHeaders['Origin'] || requestHeaders['origin'];
+    if (
+      !origin ||
+      origin === 'file://' ||
+      origin === 'null' ||
+      (typeof origin === 'string' && origin.startsWith('file:'))
+    ) {
+      requestHeaders['Origin'] = 'http://localhost:5173';
+    }
+    callback({ requestHeaders });
+  });
+
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const responseHeaders = { ...details.responseHeaders };
+    responseHeaders['access-control-allow-origin'] = ['*'];
+    responseHeaders['access-control-allow-methods'] = [
+      'GET, POST, PUT, DELETE, OPTIONS',
+    ];
+    responseHeaders['access-control-allow-headers'] = [
+      'Content-Type, Authorization',
+    ];
+    callback({ responseHeaders });
+  });
+
   createWindow();
   createTray();
   registerGlobalShortcuts();
