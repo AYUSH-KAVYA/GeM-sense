@@ -1,6 +1,11 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://gem-compare-api.onrender.com/api';
+// In packaged Electron desktop app (file:// protocol), connect directly to the live Render backend.
+// In browser environments (web/Vercel), respect VITE_API_URL or fall back to Render.
+const isFileProtocol = typeof window !== 'undefined' && window.location.protocol === 'file:';
+const API_BASE_URL = isFileProtocol
+  ? 'https://gem-compare-api.onrender.com/api'
+  : (import.meta.env.VITE_API_URL || 'https://gem-compare-api.onrender.com/api');
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,

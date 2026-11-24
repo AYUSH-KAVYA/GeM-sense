@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Layers, ShieldCheck, ExternalLink, Menu, X } from 'lucide-react';
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'https://gem-compare-api.onrender.com/api').replace(/\/$/, '');
+const isFileProtocol = typeof window !== 'undefined' && window.location.protocol === 'file:';
+const API_BASE_URL = (
+  isFileProtocol
+    ? 'https://gem-compare-api.onrender.com/api'
+    : (import.meta.env.VITE_API_URL || 'https://gem-compare-api.onrender.com/api')
+).replace(/\/$/, '');
 
 export default function Navbar() {
   const location = useLocation();
