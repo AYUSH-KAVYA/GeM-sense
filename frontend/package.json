@@ -36,6 +36,9 @@
   "build": {
     "appId": "com.gemcompare.desktop",
     "productName": "GeM Compare",
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "dist/**/*",
       "electron/**/*",
@@ -43,6 +46,7 @@
     ],
     "mac": {
       "category": "public.app-category.business",
+      "identity": null,
       "target": [
         "dmg",
         "zip"
